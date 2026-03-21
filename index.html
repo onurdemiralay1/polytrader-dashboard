@@ -659,23 +659,30 @@ function _render() {
     if (!b || b.cash == null || b.portfolio_value == null) { yazlikHasData = false; return; }
     yazlikBalance += b.cash + b.portfolio_value;
   });
+  // Daily rate: only use realized PnL from redeemed periods
   if (yazlikHasData) {
     yazlikBots.forEach(name => {
       const b = bots[name];
       if (!b || !b.periods || !b.periods.length) return;
-      const allPnl = getAdjustedPnl(b, 'all');
-      const oldest = Math.min(...b.periods.map(p => p.period_start).filter(t => t > 0));
-      const newest = Math.max(...b.periods.map(p => p.period_start));
+      const redeemed = b.periods.filter(p => p.won);
+      if (!redeemed.length) return;
+      const realizedPnl = redeemed.reduce((sum, p) => sum + p.pnl, 0);
+      const oldest = Math.min(...redeemed.map(p => p.period_start));
+      const newest = Math.max(...redeemed.map(p => p.period_start));
       const days = Math.max((newest - oldest) / 86400, 0.5);
-      yazlikEarnings += allPnl / days;
+      yazlikEarnings += realizedPnl / days;
     });
   }
   const yazlikRemaining = YAZLIK_PRICE - yazlikBalance;
   const yazlikDaysLeft = yazlikEarnings > 0 ? Math.ceil(yazlikRemaining / yazlikEarnings) : Infinity;
+  const yazlikPct = Math.min(100, (yazlikBalance / YAZLIK_PRICE) * 100);
   const yazlikEl = document.getElementById('yazlik');
   if (yazlikEl) {
     const daysStr = yazlikDaysLeft !== Infinity ? yazlikDaysLeft.toLocaleString() : '...';
-    yazlikEl.innerHTML = `<span style="color:var(--orange);font-weight:700">${daysStr}</span><span style="color:var(--dim)"> days to yazlik</span> <span style="color:var(--dim);font-size:10px">($${yazlikEarnings.toFixed(0)}/day)</span>`;
+    yazlikEl.innerHTML = `<span style="font-size:14px">🏡</span> <span style="color:var(--orange);font-weight:700">${daysStr}</span><span style="color:var(--dim)"> days to yazlik</span> <span style="color:var(--dim);font-size:10px">($${yazlikEarnings.toFixed(0)}/day)</span>
+      <div style="background:var(--border);border-radius:2px;height:3px;width:120px;margin-top:4px">
+        <div style="background:linear-gradient(90deg,var(--green),var(--orange));height:100%;width:${yazlikPct}%;border-radius:2px"></div>
+      </div>`;
   }
 
   // Summary cards
