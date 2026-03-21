@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Polytrader Live</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#08080c;--surface:#111118;--border:#1a1a25;--border2:#252535;
+  --text:#d4d4dc;--dim:#555568;--green:#4ade80;--red:#f87171;
+  --blue:#60a5fa;--orange:#fb923c;--pink:#f472b6;
+}
+body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',monospace;font-size:12px;padding:16px 20px}
+
+.hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:14px}
+.hdr h1{font-size:15px;font-weight:600;letter-spacing:-0.3px}
+.hdr .st{color:var(--dim);font-size:11px;display:flex;align-items:center;gap:8px}
+.hdr .dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.rbtn{background:none;border:1px solid var(--border);color:var(--dim);padding:3px 10px;border-radius:3px;cursor:pointer;font:inherit;font-size:10px}
+.rbtn:hover{color:var(--text);border-color:var(--border2)}
+
+.tabs{display:flex;gap:3px;margin-bottom:14px}
+.tabs button{background:var(--surface);border:1px solid var(--border);color:var(--dim);padding:5px 12px;border-radius:4px;cursor:pointer;font:inherit;font-size:11px}
+.tabs button:hover{color:var(--text)}
+.tabs button.on{background:var(--border);color:var(--text);border-color:var(--border2)}
+
+.strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.scard{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 14px;position:relative;overflow:hidden}
+.scard::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--c)}
+.scard .nm{font-size:11px;color:var(--dim);margin-bottom:2px;display:flex;justify-content:space-between;align-items:center}
+.scard .nm .badge{font-size:9px;padding:1px 5px;border-radius:3px}
+.scard .nm .badge.active{background:rgba(74,222,128,.15);color:var(--green)}
+.scard .nm .badge.stale{background:rgba(251,146,60,.15);color:var(--orange)}
+.scard .nm .badge.offline{background:rgba(248,113,113,.15);color:var(--red)}
+.scard .pnl{font-size:22px;font-weight:700;margin:4px 0}
+.scard .row{display:flex;gap:12px;font-size:10px;color:var(--dim);flex-wrap:wrap}
+.scard .row span b{color:var(--text);font-weight:500}
+.scard .bal-row{display:flex;gap:12px;font-size:10px;color:var(--dim);margin-top:4px;padding-top:4px;border-top:1px solid var(--border)}
+.scard .bal-row span b{color:var(--text);font-weight:500}
+
+.pos{color:var(--green)}.neg{color:var(--red)}
+
+.cur-section{background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:14px;overflow:hidden}
+.cur-hdr{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.cur-hdr .title{font-weight:600;font-size:12px}
+.cur-hdr .timer{color:var(--dim);font-size:11px}
+.cur-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)}
+.cur-bot{background:var(--surface);padding:10px 12px}
+.cur-bot .bn{font-size:10px;color:var(--dim);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.cur-bot .bn .dot{width:6px;height:6px;border-radius:50%}
+.cur-bot .chart-wrap{height:60px;margin-bottom:6px;position:relative}
+.cur-bot .chart-wrap svg{width:100%;height:100%}
+.cur-bot .stats{font-size:10px;color:var(--dim);line-height:1.6}
+.cur-bot .stats b{color:var(--text);font-weight:500}
+.cur-bot .stats .pos-line{display:flex;justify-content:space-between}
+
+.ptable-wrap{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:14px}
+.ptable-hdr{padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;font-size:12px}
+.ptable{width:100%;border-collapse:collapse}
+.ptable th{text-align:left;padding:6px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;box-shadow:0 1px 0 var(--border)}
+.ptable td{padding:5px 10px;border-bottom:1px solid rgba(255,255,255,.02);font-size:11px;white-space:nowrap}
+.ptable tr:hover{background:rgba(255,255,255,.015)}
+.ptable .winner{background:rgba(74,222,128,.06)}
+.ptable .per-name{color:var(--dim);max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.ptable .per-copy{cursor:pointer;transition:color .15s}
+.ptable .per-copy:hover{color:var(--text)}
+.ptable .per-copy.copied{color:var(--green)!important}
+.ptable .t-count{color:var(--dim);font-size:9px;margin-left:4px}
+.ptable-scroll{max-height:520px;overflow-y:auto}
+.ptable-scroll::-webkit-scrollbar{width:4px}
+.ptable-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.note{color:var(--dim);font-size:10px;padding:6px 14px;border-top:1px solid var(--border)}
+
+.trades-section{margin-top:14px}
+.trades-section .sec-hdr{font-weight:600;font-size:12px;margin-bottom:10px}
+.trades-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+.trades-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.trades-card .th{padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;display:flex;align-items:center;gap:6px}
+.trades-card .th .dot{width:6px;height:6px;border-radius:50%}
+.trow{display:flex;padding:3px 12px;font-size:10px;gap:6px;align-items:center;border-bottom:1px solid rgba(255,255,255,.015)}
+.trow:hover{background:rgba(255,255,255,.015)}
+.trow .tm{color:var(--dim);width:48px;flex-shrink:0}
+.trow .sd{width:28px;font-weight:600;flex-shrink:0}
+.trow .sd.BUY{color:var(--green)}.trow .sd.SELL{color:var(--red)}
+.trow .dt{flex:1;color:var(--dim);overflow:hidden;text-overflow:ellipsis}
+.trow .am{width:55px;text-align:right;flex-shrink:0}
+
+.loading{text-align:center;padding:60px;color:var(--dim)}
+.err{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);color:var(--red);padding:10px 14px;border-radius:6px;font-size:11px}
+.date-range{display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:11px;color:var(--dim)}
+.date-range input{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font:inherit;font-size:11px}
+.date-range input::-webkit-calendar-picker-indicator{filter:invert(0.7)}
+.date-range .clear-btn{background:none;border:1px solid var(--border);color:var(--dim);padding:3px 8px;border-radius:3px;cursor:pointer;font:inherit;font-size:10px}
+.date-range .clear-btn:hover{color:var(--text);border-color:var(--border2)}
+.live-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--green);animation:pulse 1s infinite;margin-right:4px}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1>Polytrader Live</h1>
+  <div class="st">
+    <span class="dot"></span>
+    <span id="st-txt">Loading...</span>
+    <button class="rbtn" onclick="refreshAll()">Refresh</button>
+  </div>
+</div>
+<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+  <div class="tabs" id="tabs" style="margin-bottom:0">
+    <button class="on" data-p="24h">24h</button>
+    <button data-p="today">Today</button>
+    <button data-p="1h">1h</button>
+    <button data-p="all">All Data</button>
+    <button data-p="custom">Custom</button>
+  </div>
+  <div class="date-range" id="date-range" style="display:none">
+    <span>From (UTC)</span>
+    <input type="datetime-local" id="dt-from">
+    <span>To (UTC)</span>
+    <input type="datetime-local" id="dt-to">
+    <button class="clear-btn" id="dt-clear">Clear</button>
+  </div>
+</div>
+<div id="app"><div class="loading">Fetching data from Polymarket API...</div></div>
+
+<script>
+// ====== CONFIG ======
+const BOTS = {
+  iphone1: {address:'0x1F2Ea878eeCE1493F887F6Ad99fD41CBe68a1730', color:'#4ade80', label:'DO Amsterdam'},
+  AWS:     {address:'0xD4f619457619BbAc110BA5f983f12C4636EBc1a9', color:'#60a5fa', label:'AWS Original'},
+  Stop4:   {address:'0xb43aA6ADc20c12a17B403480bc9422BbBC9E484D', color:'#fb923c', label:'AWS Stop@4'},
+  BSO:     {address:'0x46b2f8a865a3572a435813e747e22cce0e835977', color:'#f472b6', label:'Onur BSO'},
+};
+const BOT_ORDER = ['iphone1','AWS','Stop4','BSO'];
+const COLORS = {iphone1:'#4ade80',AWS:'#60a5fa',Stop4:'#fb923c',BSO:'#f472b6'};
+const USDC_E = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+const RPC_URLS = ['https://polygon.gateway.tenderly.co','https://polygon.drpc.org'];
+
+let D = null, period = '24h';
+let cmpA = 'iphone1', cmpB = 'BSO';
+let livePrices = null;
+let customFrom = null, customTo = null;
+// Token cache: extracted from activity data {slug: {up: tokenId, down: tokenId}}
+let tokenCache = {};
+
+// ====== API FETCHING (client-side) ======
+
+async function fetchActivity(address, limit=500, maxPages=8) {
+  const all = [];
+  for (let page = 0; page < maxPages; page++) {
+    try {
+      const r = await fetch(`https://data-api.polymarket.com/activity?user=${address}&limit=${limit}&offset=${page*limit}`);
+      const data = await r.json();
+      if (!data || !data.length) break;
+      all.push(...data);
+      if (data.length < limit) break;
+    } catch(e) {
+      console.warn(`activity page ${page} error:`, e);
+      break;
+    }
+  }
+  return all;
+}
+
+async function fetchPositions(address) {
+  try {
+    const r = await fetch(`https://data-api.polymarket.com/positions?user=${address}`);
+    return await r.json();
+  } catch(e) {
+    console.warn('positions error:', e);
+    return [];
+  }
+}
+
+async function fetchBalances() {
+  const batch = [];
+  const botList = BOT_ORDER.map(n => [n, BOTS[n]]);
+  botList.forEach(([name, bot], i) => {
+    const addrPadded = '000000000000000000000000' + bot.address.slice(2).toLowerCase();
+    const data = '0x70a08231' + addrPadded;
+    batch.push({jsonrpc:'2.0', method:'eth_call', params:[{to:USDC_E, data}, 'latest'], id:i});
+  });
+  for (const rpcUrl of RPC_URLS) {
+    try {
+      const r = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(batch)
+      });
+      const results = await r.json();
+      const balances = {};
+      results.forEach(res => {
+        const name = botList[res.id][0];
+        balances[name] = Math.round(parseInt(res.result, 16) / 1e6 * 100) / 100;
+      });
+      return balances;
+    } catch(e) {
+      console.warn(`balance RPC error (${rpcUrl}):`, e);
+    }
+  }
+  return {};
+}
+
+// ====== DATA PROCESSING (ported from Python) ======
+
+function processBotData(events) {
+  const now = Date.now() / 1000;
+  const todayStart = new Date();
+  todayStart.setUTCHours(0,0,0,0);
+  const todayTs = todayStart.getTime() / 1000;
+  const h24 = now - 86400;
+  const h1 = now - 3600;
+
+  const buckets = {};
+  ['all','24h','today','1h'].forEach(k => {
+    buckets[k] = {buy:0, sell:0, redeem:0, rebate:0, trades:0, redeems:0};
+  });
+  const periods = {};
+  const recentTrades = [];
+  let lastActive = 0;
+
+  function ensurePeriod(slug, ts, title) {
+    if (!periods[slug]) {
+      periods[slug] = {buy:0, sell:0, redeem:0, trades:0, ts, title, trade_list:[]};
+    }
+  }
+
+  events.forEach(e => {
+    const ts = e.timestamp || 0;
+    const usdc = parseFloat(e.usdcSize || 0) || 0;
+    const etype = e.type || '';
+    const slug = e.slug || e.eventSlug || '';
+    const title = e.title || '';
+
+    if (ts > lastActive) lastActive = ts;
+
+    const active = ['all'];
+    if (ts >= h24) active.push('24h');
+    if (ts >= todayTs) active.push('today');
+    if (ts >= h1) active.push('1h');
+
+    if (etype === 'TRADE') {
+      const side = e.side || '';
+      const size = parseFloat(e.size || 0) || 0;
+      const price = parseFloat(e.price || 0) || 0;
+      const outcome = e.outcome || '';
+      const asset = e.asset || '';
+
+      // Extract token IDs for CLOB from activity data
+      if (slug && asset && outcome) {
+        if (!tokenCache[slug]) tokenCache[slug] = {};
+        if (outcome === 'Up') tokenCache[slug].up = asset;
+        else if (outcome === 'Down') tokenCache[slug].down = asset;
+      }
+
+      active.forEach(b => {
+        buckets[b].trades++;
+        buckets[b][side === 'BUY' ? 'buy' : 'sell'] += usdc;
+      });
+
+      if (slug) {
+        ensurePeriod(slug, ts, title);
+        const p = periods[slug];
+        p.trades++;
+        p[side === 'BUY' ? 'buy' : 'sell'] += usdc;
+        if (p.ts < ts) p.ts = ts;
+        p.trade_list.push({t:ts, side, size, price, usdc, outcome});
+      }
+
+      if (recentTrades.length < 30) {
+        recentTrades.push({t:ts, side, size, price, usdc, outcome, title});
+      }
+    } else if (etype === 'REDEEM') {
+      active.forEach(b => {
+        buckets[b].redeem += usdc;
+        buckets[b].redeems++;
+      });
+      if (slug) {
+        ensurePeriod(slug, ts, title);
+        periods[slug].redeem += usdc;
+      }
+    } else if (etype === 'MAKER_REBATE') {
+      active.forEach(b => { buckets[b].rebate += usdc; });
+    }
+  });
+
+  const metrics = {};
+  Object.entries(buckets).forEach(([bname, bd]) => {
+    const pnl = -bd.buy + bd.sell + bd.redeem + bd.rebate;
+    metrics[bname] = {
+      pnl: Math.round(pnl*100)/100,
+      trades: bd.trades,
+      redeems: bd.redeems,
+      volume: Math.round((bd.buy + bd.sell)*100)/100,
+      rebates: Math.round(bd.rebate*100)/100,
+    };
+  });
+
+  const periodList = [];
+  const sortedPeriods = Object.entries(periods).sort((a,b) => b[1].ts - a[1].ts);
+  sortedPeriods.forEach(([slug, p]) => {
+    const ppnl = -p.buy + p.sell + p.redeem;
+    let periodStart = 0;
+    try { periodStart = parseInt(slug.split('-').pop()); } catch(e) {}
+    const resolved = p.redeem > 0 || (periodStart > 0 && now - periodStart > 1200);
+    const entry = {
+      slug, title: p.title, pnl: Math.round(ppnl*100)/100,
+      trades: p.trades, ts: p.ts, resolved,
+      period_start: periodStart, won: p.redeem > 0,
+    };
+    if (periodList.length < 3) {
+      entry.trade_list = p.trade_list.slice().sort((a,b) => a.t - b.t);
+    }
+    periodList.push(entry);
+  });
+
+  return {
+    metrics, recent_trades: recentTrades,
+    last_active: lastActive, events: events.length,
+    periods: periodList.slice(0, 80),
+  };
+}
+
+function processPositions(positions) {
+  let totalValue = 0, totalCost = 0;
+  const active = [];
+  (positions || []).forEach(p => {
+    const size = parseFloat(p.size || 0) || 0;
+    if (size <= 0) return;
+    const curVal = parseFloat(p.currentValue || 0) || 0;
+    const initVal = parseFloat(p.initialValue || 0) || 0;
+    totalValue += curVal;
+    totalCost += initVal;
+
+    // Extract token IDs from positions too (supplements activity data)
+    const slug = p.slug || '';
+    const outcome = p.outcome || '';
+    const asset = p.asset || '';
+    if (slug && asset && outcome) {
+      if (!tokenCache[slug]) tokenCache[slug] = {};
+      if (outcome === 'Up') tokenCache[slug].up = asset;
+      else if (outcome === 'Down') tokenCache[slug].down = asset;
+    }
+
+    active.push({
+      outcome,
+      slug,
+      title: p.title || '',
+      size: Math.round(size*100)/100,
+      avgPrice: Math.round((parseFloat(p.avgPrice||0)||0)*10000)/10000,
+      curPrice: parseFloat(p.curPrice || 0) || 0,
+      value: Math.round(curVal*100)/100,
+      cost: Math.round(initVal*100)/100,
+      pnl: Math.round((parseFloat(p.cashPnl||0)||0)*100)/100,
+      redeemable: !!p.redeemable,
+    });
+  });
+
+  const pnlBySlug = {};
+  (positions || []).forEach(p => {
+    const slug = p.slug || '';
+    if (slug && (parseFloat(p.size||0)||0) > 0) {
+      pnlBySlug[slug] = (pnlBySlug[slug] || 0) + (parseFloat(p.cashPnl||0)||0);
+    }
+  });
+  const roundedPnl = {};
+  Object.entries(pnlBySlug).forEach(([k,v]) => { roundedPnl[k] = Math.round(v*100)/100; });
+
+  return {
+    portfolio_value: Math.round(totalValue*100)/100,
+    portfolio_cost: Math.round(totalCost*100)/100,
+    unrealized_pnl: Math.round((totalValue - totalCost)*100)/100,
+    positions: active,
+    pnl_by_slug: roundedPnl,
+  };
+}
+
+// ====== REFRESH ALL ======
+
+async function refreshAll() {
+  document.getElementById('st-txt').textContent = 'Refreshing...';
+  try {
+    const balances = await fetchBalances();
+    const bots = {};
+
+    // Fetch all bots in parallel
+    const results = await Promise.allSettled(BOT_ORDER.map(async name => {
+      const bot = BOTS[name];
+      const [events, rawPos] = await Promise.all([
+        fetchActivity(bot.address),
+        fetchPositions(bot.address),
+      ]);
+      const data = processBotData(events);
+      const posData = processPositions(rawPos);
+      data.label = bot.label;
+      data.color = bot.color;
+      data.address = bot.address;
+      data.positions = posData.positions;
+      data.portfolio_value = posData.portfolio_value;
+      data.unrealized_pnl = posData.unrealized_pnl;
+      data.pos_pnl = posData.pnl_by_slug;
+      data.cash = balances[name] != null ? balances[name] : null;
+      return {name, data};
+    }));
+
+    results.forEach(r => {
+      if (r.status === 'fulfilled') {
+        bots[r.value.name] = r.value.data;
+      } else {
+        const name = BOT_ORDER[results.indexOf(r)];
+        bots[name] = {error: r.reason?.message || 'Unknown error', label: BOTS[name].label, color: BOTS[name].color, address: BOTS[name].address};
+      }
+    });
+
+    D = {_ts: Date.now()/1000, _bots: bots};
+    render();
+    document.getElementById('st-txt').textContent =
+      `Updated ${new Date().toLocaleTimeString()} · auto 30s`;
+  } catch(e) {
+    console.error('refreshAll error:', e);
+    document.getElementById('app').innerHTML = `<div class="err">${e.message}</div>`;
+  }
+}
+
+// ====== LIVE PRICES (CLOB midpoint, no gamma needed) ======
+
+async function pollPrices() {
+  try {
+    const now = Math.floor(Date.now()/1000);
+    const periodStart = Math.floor(now / 900) * 900;
+    const slug = `btc-updown-15m-${periodStart}`;
+
+    // Get token IDs from our cache (populated from activity + positions data)
+    // Only use tokens from the CURRENT slug (different periods have different tokens)
+    const tokens = tokenCache[slug];
+    if (!tokens || (!tokens.up && !tokens.down)) return;
+
+    // Fetch whichever tokens we have (may only have one side early in the period)
+    let upPrice = null, dnPrice = null;
+    const fetches = [];
+    if (tokens.up) fetches.push(fetch(`https://clob.polymarket.com/midpoint?token_id=${tokens.up}`).then(r=>r.json()).then(d=>{upPrice=parseFloat(d.mid);}));
+    if (tokens.down) fetches.push(fetch(`https://clob.polymarket.com/midpoint?token_id=${tokens.down}`).then(r=>r.json()).then(d=>{dnPrice=parseFloat(d.mid);}));
+    await Promise.all(fetches);
+
+    const changed = !livePrices || livePrices.up !== upPrice || livePrices.down !== dnPrice || livePrices.slug !== slug;
+    livePrices = {slug, up: upPrice, down: dnPrice, ts: now, period_start: periodStart};
+    if (!changed) return;
+
+    // Update header prices
+    const hdr = document.getElementById('live-price-hdr');
+    if (hdr) {
+      const parts = [];
+      if (upPrice != null) parts.push(`Up ${upPrice.toFixed(3)}`);
+      if (dnPrice != null) parts.push(`Down ${dnPrice.toFixed(3)}`);
+      hdr.innerHTML = parts.length ? `<span class="live-dot"></span>${parts.join(' / ')}` : '';
+    }
+
+    // Update each bot's "now" prices and PnL in current market
+    if (D) {
+      BOT_ORDER.forEach(name => {
+        const b = D._bots[name];
+        if (!b) return;
+        const posUp = b.positions?.find(x => x.slug === slug && x.outcome === 'Up');
+        const posDn = b.positions?.find(x => x.slug === slug && x.outcome === 'Down');
+        const upSize = posUp ? posUp.size : 0, dnSize = posDn ? posDn.size : 0;
+        const upCost = posUp ? posUp.cost : 0, dnCost = posDn ? posDn.cost : 0;
+        const upCur = upPrice != null ? upPrice : (posUp ? posUp.curPrice : 0);
+        const dnCur = dnPrice != null ? dnPrice : (posDn ? posDn.curPrice : 0);
+        const upVal = upSize * upCur, dnVal = dnSize * dnCur;
+        const upPnl = upVal - upCost, dnPnl = dnVal - dnCost, totPnl = upPnl + dnPnl;
+        const el = id => document.getElementById(id);
+        if (upPrice != null) { const e1 = el('cur-up-now-'+name); if(e1) e1.textContent = upPrice.toFixed(2); }
+        if (dnPrice != null) { const e2 = el('cur-dn-now-'+name); if(e2) e2.textContent = dnPrice.toFixed(2); }
+        const e3 = el('cur-up-pnl-'+name); if(e3 && upPrice != null) { e3.textContent = fmt(upPnl); e3.className = cls(upPnl); }
+        const e4 = el('cur-dn-pnl-'+name); if(e4 && dnPrice != null) { e4.textContent = fmt(dnPnl); e4.className = cls(dnPnl); }
+        const e5 = el('cur-tot-pnl-'+name); if(e5) { e5.textContent = fmt(totPnl); e5.className = cls(totPnl); }
+        const e6 = el('cur-tot-val-'+name); if(e6) e6.textContent = '$'+(upVal+dnVal).toFixed(1);
+      });
+    }
+  } catch(e) {
+    console.warn('pollPrices error:', e);
+  }
+}
+
+// ====== HELPERS ======
+
+function getAdjustedPnl(b, period) {
+  if (!b || !b.metrics) return 0;
+  if (period === 'custom') {
+    if (!b.periods || !customFrom || !customTo) return 0;
+    let pnl = 0;
+    const fromTs = customFrom.getTime()/1000;
+    const toTs = customTo.getTime()/1000;
+    b.periods.forEach(p => {
+      if (p.period_start >= fromTs && p.period_start <= toTs) {
+        pnl += getPeriodPnl(b, p.slug, p.pnl, p.resolved, p.won);
+      }
+    });
+    return pnl;
+  }
+  if (!b.metrics[period]) return 0;
+  let pnl = b.metrics[period].pnl;
+  if (b.pos_pnl && b.periods) {
+    b.periods.forEach(p => {
+      // Use positions PnL when no redeem yet (won=false), even if period is time-resolved
+      if (!p.won && b.pos_pnl[p.slug] != null) {
+        pnl += (b.pos_pnl[p.slug] - p.pnl);
+      }
+    });
+  }
+  return pnl;
+}
+
+function getCustomTrades(b) {
+  if (!b.periods || !customFrom || !customTo) return 0;
+  const fromTs = customFrom.getTime()/1000, toTs = customTo.getTime()/1000;
+  let t = 0;
+  b.periods.forEach(p => { if (p.period_start >= fromTs && p.period_start <= toTs) t += p.trades; });
+  return t;
+}
+
+function getPeriodPnl(b, slug, activityPnl, resolved, won) {
+  // Use positions PnL when no redeem in activity data yet.
+  // "resolved" means period ended (time-based), but shares may not be redeemed yet.
+  // Positions API knows the correct PnL including unredeemed winning shares.
+  if (!won && b && b.pos_pnl && b.pos_pnl[slug] != null) {
+    return b.pos_pnl[slug];
+  }
+  return activityPnl;
+}
+
+const $ = v => v >= 0 ? '+' : '';
+const fmt = v => $(v) + '$' + Math.abs(v).toFixed(2);
+const fmtBig = v => $(v) + '$' + Math.abs(v).toFixed(v >= 100 || v <= -100 ? 0 : 2);
+const cls = v => v >= 0 ? 'pos' : 'neg';
+const hm = ts => new Date(ts*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+const ago = ts => {
+  const d = Date.now()/1000 - ts;
+  if (d < 60) return Math.floor(d)+'s';
+  if (d < 3600) return Math.floor(d/60)+'m';
+  if (d < 86400) return Math.floor(d/3600)+'h';
+  return Math.floor(d/86400)+'d';
+};
+const status = ts => {
+  const d = Date.now()/1000 - ts;
+  if (d < 300) return ['active','Active'];
+  if (d < 1800) return ['stale','Stale'];
+  return ['offline','Off'];
+};
+
+// ====== EVENTS ======
+
+document.getElementById('tabs').onclick = e => {
+  if (e.target.tagName !== 'BUTTON') return;
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.remove('on'));
+  e.target.classList.add('on');
+  period = e.target.dataset.p;
+  document.getElementById('date-range').style.display = period === 'custom' ? 'flex' : 'none';
+  if (D) render();
+};
+document.addEventListener('change', e => {
+  if (e.target.id === 'dt-from') { customFrom = e.target.value ? new Date(e.target.value + 'Z') : null; if(D) render(); }
+  if (e.target.id === 'dt-to') { customTo = e.target.value ? new Date(e.target.value + 'Z') : null; if(D) render(); }
+});
+document.addEventListener('click', e => {
+  const copyEl = e.target.closest('.per-copy');
+  if (copyEl && copyEl.dataset.ts) {
+    navigator.clipboard.writeText(copyEl.dataset.ts).then(() => {
+      const orig = copyEl.textContent;
+      copyEl.textContent = 'Copied ' + copyEl.dataset.ts;
+      copyEl.classList.add('copied');
+      setTimeout(() => { copyEl.textContent = orig; copyEl.classList.remove('copied'); }, 1200);
+    });
+    return;
+  }
+  if (e.target.id === 'dt-clear') {
+    customFrom = customTo = null;
+    const f = document.getElementById('dt-from'), t = document.getElementById('dt-to');
+    if(f) f.value = ''; if(t) t.value = '';
+    if(D) render();
+  }
+});
+
+// ====== CHART ======
+
+function buildChart(trades, periodStart) {
+  if (!trades || !trades.length) return '<svg viewBox="0 0 200 60"><text x="100" y="33" text-anchor="middle" fill="#555568" font-size="10">No trades</text></svg>';
+  const W = 200, H = 60, PAD = 2, duration = 900;
+  let pos = 0, maxPos = 0, minPos = 0;
+  const points = [{x: 0, pos: 0}];
+  trades.forEach(t => {
+    const x = Math.max(0, Math.min(1, (t.t - periodStart) / duration));
+    const delta = t.side === 'BUY' ? t.size : -t.size;
+    pos += delta;
+    if (pos > maxPos) maxPos = pos;
+    if (pos < minPos) minPos = pos;
+    points.push({x, pos, side: t.side, size: t.size, outcome: t.outcome});
+  });
+  const range = Math.max(maxPos - minPos, 10);
+  const toY = v => PAD + (H - 2*PAD) * (1 - (v - minPos) / range);
+  const toX = frac => PAD + frac * (W - 2*PAD);
+  const zeroY = toY(0);
+  let path = `M${toX(0)},${zeroY.toFixed(1)}`;
+  points.forEach(p => { path += ` L${toX(p.x).toFixed(1)},${toY(p.pos).toFixed(1)}`; });
+  const now = Date.now()/1000;
+  const nowFrac = Math.min(1, Math.max(0, (now - periodStart) / duration));
+  path += ` L${toX(nowFrac).toFixed(1)},${toY(pos).toFixed(1)}`;
+  let markers = '';
+  points.forEach(p => {
+    if (p.side) {
+      const color = p.side === 'BUY' ? '#4ade80' : '#f87171';
+      const r = Math.min(3.5, Math.max(1.5, p.size / 8));
+      markers += `<circle cx="${toX(p.x).toFixed(1)}" cy="${toY(p.pos).toFixed(1)}" r="${r}" fill="${color}" opacity="0.7"/>`;
+    }
+  });
+  let grid = '';
+  for (let m = 0; m <= 15; m += 5) {
+    const x = toX(m/15).toFixed(1);
+    grid += `<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="#1a1a25" stroke-width="0.5"/>`;
+    if (m > 0 && m < 15) grid += `<text x="${x}" y="${H-1}" text-anchor="middle" fill="#555568" font-size="7">${m}m</text>`;
+  }
+  const nowX = toX(nowFrac).toFixed(1);
+  const nowLine = nowFrac < 1 ? `<line x1="${nowX}" y1="0" x2="${nowX}" y2="${H}" stroke="#ffffff20" stroke-width="0.5" stroke-dasharray="2,2"/>` : '';
+  return `<svg viewBox="0 0 ${W} ${H}">
+    ${grid}
+    <line x1="${PAD}" y1="${zeroY.toFixed(1)}" x2="${W-PAD}" y2="${zeroY.toFixed(1)}" stroke="#252535" stroke-width="0.5"/>
+    ${nowLine}
+    <path d="${path}" fill="none" stroke="#8888aa" stroke-width="1.2" opacity="0.6"/>
+    ${markers}
+    <text x="${W-PAD}" y="${toY(pos).toFixed(1)}" text-anchor="end" fill="#d4d4dc" font-size="8" dy="-3">${pos > 0 ? '+' : ''}${pos.toFixed(0)}</text>
+  </svg>`;
+}
+
+// ====== RENDER ======
+
+function render() {
+  const bots = D._bots;
+  let h = '';
+
+  // Summary cards
+  h += '<div class="strip">';
+  BOT_ORDER.forEach(name => {
+    const b = bots[name];
+    if (!b || b.error) {
+      h += `<div class="scard" style="--c:${COLORS[name]}"><div class="nm">${name}</div><div class="err">${b?.error||'No data'}</div></div>`;
+      return;
+    }
+    const m = (period !== 'custom' && b.metrics[period]) ? b.metrics[period] : {pnl:0,trades:0,volume:0,rebates:0,redeems:0};
+    const adjPnl = getAdjustedPnl(b, period);
+    const displayTrades = period === 'custom' ? getCustomTrades(b) : m.trades;
+    const [sc, st] = status(b.last_active);
+    const cash = b.cash != null ? `$${b.cash.toFixed(0)}` : '?';
+    const portVal = b.portfolio_value != null ? `$${b.portfolio_value.toFixed(0)}` : '?';
+    const totalVal = (b.cash != null && b.portfolio_value != null) ? `$${(b.cash + b.portfolio_value).toFixed(0)}` : '?';
+
+    h += `<div class="scard" style="--c:${b.color}">
+      <div class="nm">${name} <span class="badge ${sc}">${st} ${ago(b.last_active)}</span></div>
+      <div class="pnl ${cls(adjPnl)}">${fmtBig(adjPnl)}</div>
+      <div class="row">
+        <span><b>${displayTrades}</b> trades</span>
+        <span><b>${m.redeems}</b> redeems</span>
+        <span>vol <b>$${m.volume.toFixed(0)}</b></span>
+      </div>
+      <div class="bal-row">
+        <span>Cash <b>${cash}</b></span>
+        <span>Pos <b>${portVal}</b></span>
+        <span>Total <b>${totalVal}</b></span>
+      </div>
+    </div>`;
+  });
+  h += '</div>';
+
+  // Current market section
+  let currentSlug = null, currentTitle = '', currentStart = 0;
+  BOT_ORDER.forEach(name => {
+    const b = bots[name];
+    if (!b || !b.periods || !b.periods.length) return;
+    b.periods.forEach(p => {
+      if (p.period_start > currentStart) {
+        currentStart = p.period_start;
+        currentSlug = p.slug;
+        currentTitle = p.title || currentSlug;
+      }
+    });
+  });
+
+  if (currentSlug) {
+    const elapsed = Math.max(0, Date.now()/1000 - currentStart);
+    const remaining = Math.max(0, 900 - elapsed);
+    const mins = Math.floor(remaining/60);
+    const secs = Math.floor(remaining%60);
+    const timerTxt = remaining > 0 ? `${mins}:${secs.toString().padStart(2,'0')} left` : 'Resolved';
+    const shortTitle = currentTitle.replace('Bitcoin Up or Down - ','').replace(/ ET$/,'');
+
+    const lpGlobal = livePrices && livePrices.slug === currentSlug ? livePrices : null;
+    const priceLabel = lpGlobal ? `<span class="live-dot"></span>Up ${lpGlobal.up.toFixed(3)} / Down ${lpGlobal.down.toFixed(3)}` : '';
+
+    h += `<div class="cur-section">
+      <div class="cur-hdr">
+        <span class="title">Current: ${shortTitle}</span>
+        <span id="live-price-hdr" style="font-size:11px;color:var(--dim)">${priceLabel}</span>
+        <span class="timer" id="timer">${timerTxt}</span>
+      </div>
+      <div class="cur-grid">`;
+
+    BOT_ORDER.forEach(name => {
+      const b = bots[name];
+      const pp = b?.periods?.find(p => p.slug === currentSlug);
+      const trades = pp?.trade_list || [];
+
+      const posUp = b?.positions?.find(p => p.slug === currentSlug && p.outcome === 'Up');
+      const posDn = b?.positions?.find(p => p.slug === currentSlug && p.outcome === 'Down');
+
+      const upSize = posUp ? posUp.size : 0;
+      const dnSize = posDn ? posDn.size : 0;
+      const upAvg = posUp ? posUp.avgPrice : 0;
+      const dnAvg = posDn ? posDn.avgPrice : 0;
+      const lp = livePrices && livePrices.slug === currentSlug ? livePrices : null;
+      const upCur = (lp && lp.up != null) ? lp.up : (posUp ? posUp.curPrice : 0);
+      const dnCur = (lp && lp.down != null) ? lp.down : (posDn ? posDn.curPrice : 0);
+      const upValue = upSize * (upCur || 0);
+      const dnValue = dnSize * (dnCur || 0);
+      const upCost = posUp ? posUp.cost : 0;
+      const dnCost = posDn ? posDn.cost : 0;
+      const upPnl = upValue - upCost;
+      const dnPnl = dnValue - dnCost;
+      const totalPnl = upPnl + dnPnl;
+      const totalCost = upCost + dnCost;
+      const totalValue = upValue + dnValue;
+
+      h += `<div class="cur-bot">
+        <div class="bn"><span class="dot" style="background:${COLORS[name]}"></span>${name}`;
+      const hasPrices = (upSize > 0 ? upCur > 0 : true) && (dnSize > 0 ? dnCur > 0 : true);
+      if (totalCost > 0) {
+        const totTxt = hasPrices ? fmt(totalPnl) : '-';
+        h += ` <span id="cur-tot-pnl-${name}" style="margin-left:auto;font-weight:600" class="${hasPrices ? cls(totalPnl) : ''}">${totTxt}</span>`;
+      }
+      h += `</div>
+        <div class="chart-wrap">${buildChart(trades, currentStart)}</div>
+        <div class="stats">`;
+
+      if (upSize > 0 || dnSize > 0) {
+        if (upSize > 0) {
+          const upNowTxt = upCur > 0 ? upCur.toFixed(2) : '-';
+          const upPnlTxt = upCur > 0 ? fmt(upPnl) : '-';
+          h += `<div class="pos-line">
+            <span>Up: <b>${upSize.toFixed(0)}</b> sh</span>
+            <span>avg <b>${upAvg.toFixed(2)}</b></span>
+            <span>now <b id="cur-up-now-${name}">${upNowTxt}</b></span>
+            <span id="cur-up-pnl-${name}" class="${upCur > 0 ? cls(upPnl) : ''}">${upPnlTxt}</span>
+          </div>`;
+        }
+        if (dnSize > 0) {
+          const dnNowTxt = dnCur > 0 ? dnCur.toFixed(2) : '-';
+          const dnPnlTxt = dnCur > 0 ? fmt(dnPnl) : '-';
+          h += `<div class="pos-line">
+            <span>Dn: <b>${dnSize.toFixed(0)}</b> sh</span>
+            <span>avg <b>${dnAvg.toFixed(2)}</b></span>
+            <span>now <b id="cur-dn-now-${name}">${dnNowTxt}</b></span>
+            <span id="cur-dn-pnl-${name}" class="${dnCur > 0 ? cls(dnPnl) : ''}">${dnPnlTxt}</span>
+          </div>`;
+        }
+        const valTxt = hasPrices ? `$${totalValue.toFixed(1)}` : '-';
+        h += `<div class="pos-line" style="border-top:1px solid var(--border);padding-top:3px;margin-top:2px">
+          <span>Cost: <b>$${totalCost.toFixed(1)}</b></span>
+          <span>Value: <b id="cur-tot-val-${name}">${valTxt}</b></span>
+        </div>`;
+      } else {
+        h += '<span>No position</span>';
+      }
+      h += '</div></div>';
+    });
+    h += '</div></div>';
+  }
+
+  // Period PnL table
+  const allPeriods = {};
+  BOT_ORDER.forEach(name => {
+    const b = bots[name];
+    if (!b || !b.periods) return;
+    b.periods.forEach(p => {
+      if (!allPeriods[p.slug]) allPeriods[p.slug] = {slug: p.slug, title: p.title, ts: p.ts, start: p.period_start, bots: {}};
+      allPeriods[p.slug].bots[name] = p;
+      if (p.ts > allPeriods[p.slug].ts) allPeriods[p.slug].ts = p.ts;
+    });
+  });
+  const sorted = Object.values(allPeriods).sort((a,b) => b.start - a.start);
+
+  h += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+    <span style="font-weight:600;font-size:12px">Period PnL Comparison</span>
+    <span style="color:var(--dim);font-size:10px;margin-left:auto">Compare:</span>
+    <select id="cmpA" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:3px 6px;border-radius:3px;font:inherit;font-size:10px">
+      ${BOT_ORDER.map(n => `<option value="${n}" ${n===cmpA?'selected':''}>${n}</option>`).join('')}
+    </select>
+    <span style="color:var(--dim);font-size:10px">vs</span>
+    <select id="cmpB" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:3px 6px;border-radius:3px;font:inherit;font-size:10px">
+      ${BOT_ORDER.map(n => `<option value="${n}" ${n===cmpB?'selected':''}>${n}</option>`).join('')}
+    </select>
+  </div>`;
+
+  h += `<div class="ptable-wrap">
+    <div class="ptable-scroll">
+    <table class="ptable">
+    <tr><th style="width:160px">Period</th>`;
+  BOT_ORDER.forEach(n => h += `<th style="color:${COLORS[n]}">${n}</th>`);
+  h += `<th>Best</th><th style="color:var(--blue)">${cmpA} - ${cmpB}</th></tr>`;
+
+  let cmpTotal = 0, cmpCount = 0;
+  let filteredPeriods = sorted;
+  if (period === 'custom' && customFrom && customTo) {
+    const fromTs = customFrom.getTime()/1000, toTs = customTo.getTime()/1000;
+    filteredPeriods = sorted.filter(pp => pp.start >= fromTs && pp.start <= toTs);
+  }
+  filteredPeriods.slice(0, 80).forEach(pp => {
+    const short = (pp.title || pp.slug).replace('Bitcoin Up or Down - ','').replace(/ ET$/,'');
+    let bestName = '', bestPnl = -Infinity, anyResolved = false;
+
+    const displayPnl = {};
+    BOT_ORDER.forEach(n => {
+      const bp = pp.bots[n];
+      if (!bp) return;
+      const b = bots[n];
+      displayPnl[n] = getPeriodPnl(b, pp.slug, bp.pnl, bp.resolved, bp.won);
+      if ((bp.resolved || (b?.pos_pnl && b.pos_pnl[pp.slug] != null)) && displayPnl[n] > bestPnl) {
+        bestPnl = displayPnl[n]; bestName = n; anyResolved = true;
+      }
+    });
+
+    h += `<tr><td class="per-name per-copy" data-ts="${pp.start}" title="Click to copy: ${pp.start}">${short}</td>`;
+    BOT_ORDER.forEach(n => {
+      const bp = pp.bots[n];
+      if (!bp) { h += '<td style="color:var(--dim)">-</td>'; return; }
+      const dpnl = displayPnl[n] != null ? displayPnl[n] : bp.pnl;
+      const isWinner = anyResolved && n === bestName;
+      const hasPos = !bp.resolved && bots[n]?.pos_pnl && bots[n].pos_pnl[pp.slug] != null;
+      const c = (bp.resolved || hasPos) ? cls(dpnl) : '';
+      const star = bp.resolved ? '' : (hasPos ? '' : ' *');
+      h += `<td class="${c}${isWinner?' winner':''}">${fmt(dpnl)}${star}<span class="t-count">${bp.trades}t</span></td>`;
+    });
+
+    if (anyResolved) {
+      h += `<td style="color:${COLORS[bestName]};font-weight:600">${bestName}</td>`;
+    } else {
+      h += '<td style="color:var(--dim)">-</td>';
+    }
+
+    const pA = displayPnl[cmpA], pB = displayPnl[cmpB];
+    if (pA != null && pB != null) {
+      const diff = pA - pB;
+      cmpTotal += diff;
+      cmpCount++;
+      h += `<td class="${cls(diff)}" style="font-weight:500">${fmt(diff)}</td>`;
+    } else {
+      h += '<td style="color:var(--dim)">-</td>';
+    }
+    h += '</tr>';
+  });
+
+  // Totals row
+  h += `<tr style="border-top:2px solid var(--border2);font-weight:700">
+    <td>TOTAL (${cmpCount} periods)</td>`;
+  BOT_ORDER.forEach(n => {
+    const b = bots[n];
+    if (!b || !b.periods) { h += '<td>-</td>'; return; }
+    let total = 0;
+    filteredPeriods.slice(0, 80).forEach(pp => {
+      const bp = pp.bots[n];
+      if (!bp) return;
+      total += getPeriodPnl(b, pp.slug, bp.pnl, bp.resolved, bp.won);
+    });
+    h += `<td class="${cls(total)}">${fmt(total)}</td>`;
+  });
+  h += `<td></td><td class="${cls(cmpTotal)}" style="font-weight:700">${fmt(cmpTotal)}</td>`;
+  h += '</tr>';
+
+  h += '</table></div>';
+  h += '<div class="note">PnL uses positions API for unresolved periods (live market value).</div>';
+  h += '</div>';
+
+  // Cumulative PnL sparkline per bot
+  h += '<div class="ptable-wrap"><div class="ptable-hdr">Cumulative PnL (resolved periods)</div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)">';
+  BOT_ORDER.forEach(name => {
+    const b = bots[name];
+    if (!b || !b.periods) { h += '<div style="background:var(--surface);padding:16px;color:var(--dim)">No data</div>'; return; }
+    const resolved = b.periods.filter(p => p.resolved).slice().reverse();
+    if (!resolved.length) { h += `<div style="background:var(--surface);padding:16px;color:var(--dim)">${name}: no resolved</div>`; return; }
+    let cum = 0;
+    const pts = resolved.map(p => { cum += p.pnl; return {pnl: cum}; });
+    const maxC = Math.max(...pts.map(p=>p.pnl), 0);
+    const minC = Math.min(...pts.map(p=>p.pnl), 0);
+    const range = Math.max(maxC - minC, 1);
+    const W = 200, H = 50, PAD = 2;
+    const toX = i => PAD + (i / Math.max(pts.length-1, 1)) * (W - 2*PAD);
+    const toY = v => PAD + (H - 2*PAD) * (1 - (v - minC) / range);
+    let pathD = `M${toX(0).toFixed(1)},${toY(pts[0].pnl).toFixed(1)}`;
+    pts.forEach((p, i) => { if(i>0) pathD += ` L${toX(i).toFixed(1)},${toY(p.pnl).toFixed(1)}`; });
+    let areaD = pathD + ` L${toX(pts.length-1).toFixed(1)},${toY(0).toFixed(1)} L${toX(0).toFixed(1)},${toY(0).toFixed(1)} Z`;
+    const finalPnl = pts[pts.length-1].pnl;
+    const fillColor = finalPnl >= 0 ? COLORS[name] : '#f87171';
+    h += `<div style="background:var(--surface);padding:10px 12px">
+      <div style="font-size:10px;color:var(--dim);margin-bottom:4px;display:flex;justify-content:space-between">
+        <span style="color:${COLORS[name]}">${name}</span>
+        <span class="${cls(finalPnl)}">${fmt(finalPnl)} (${resolved.length}p)</span>
+      </div>
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:50px">
+        <line x1="${PAD}" y1="${toY(0).toFixed(1)}" x2="${W-PAD}" y2="${toY(0).toFixed(1)}" stroke="#252535" stroke-width="0.5"/>
+        <path d="${areaD}" fill="${fillColor}" opacity="0.1"/>
+        <path d="${pathD}" fill="none" stroke="${fillColor}" stroke-width="1.5" opacity="0.8"/>
+      </svg>
+    </div>`;
+  });
+  h += '</div></div>';
+
+  // Recent trades
+  h += '<div class="trades-section"><div class="sec-hdr">Recent Trades</div><div class="trades-grid">';
+  BOT_ORDER.forEach(name => {
+    const b = bots[name];
+    if (!b || !b.recent_trades) return;
+    h += `<div class="trades-card"><div class="th"><span class="dot" style="background:${COLORS[name]}"></span>${name}</div>`;
+    b.recent_trades.slice(0, 15).forEach(t => {
+      h += `<div class="trow">
+        <span class="tm">${hm(t.t)}</span>
+        <span class="sd ${t.side}">${t.side[0]}</span>
+        <span class="dt">${t.size.toFixed(1)} ${t.outcome} @${t.price.toFixed(2)}</span>
+        <span class="am">$${t.usdc.toFixed(2)}</span>
+      </div>`;
+    });
+    h += '</div>';
+  });
+  h += '</div></div>';
+
+  document.getElementById('app').innerHTML = h;
+
+  // Bind compare selectors
+  const selA = document.getElementById('cmpA');
+  const selB = document.getElementById('cmpB');
+  if (selA) selA.onchange = e => { cmpA = e.target.value; render(); };
+  if (selB) selB.onchange = e => { cmpB = e.target.value; render(); };
+}
+
+// Timer countdown
+setInterval(() => {
+  const el = document.getElementById('timer');
+  if (!el || !D) return;
+  let cs = 0;
+  BOT_ORDER.forEach(n => {
+    const b = D._bots[n];
+    if (!b?.periods) return;
+    b.periods.forEach(p => { if (p.period_start > cs) cs = p.period_start; });
+  });
+  if (!cs) return;
+  const rem = Math.max(0, 900 - (Date.now()/1000 - cs));
+  if (rem <= 0) { el.textContent = 'Resolved'; return; }
+  const m = Math.floor(rem/60), s = Math.floor(rem%60);
+  el.textContent = m + ':' + s.toString().padStart(2,'0') + ' left';
+}, 1000);
+
+// Initial load + auto-refresh
+refreshAll();
+setInterval(refreshAll, 30000);
+
+// Live price polling every 5s
+pollPrices();
+setInterval(pollPrices, 5000);
+</script>
+</body>
+</html>
