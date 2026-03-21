@@ -538,9 +538,9 @@ function getPeriodPnl(b, slug, activityPnl, resolved, won) {
 }
 
 const $ = v => v >= 0 ? '+' : '';
-const fmt = v => $(v) + '$' + Math.abs(v).toFixed(2);
-const fmtBig = v => $(v) + '$' + Math.abs(v).toFixed(v >= 100 || v <= -100 ? 0 : 2);
-const cls = v => v >= 0 ? 'pos' : 'neg';
+const fmt = v => { v = v || 0; return $(v) + '$' + Math.abs(v).toFixed(2); };
+const fmtBig = v => { v = v || 0; return $(v) + '$' + Math.abs(v).toFixed(v >= 100 || v <= -100 ? 0 : 2); };
+const cls = v => (v || 0) >= 0 ? 'pos' : 'neg';
 const hm = ts => new Date(ts*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
 const ago = ts => {
   const d = Date.now()/1000 - ts;
@@ -642,6 +642,9 @@ function buildChart(trades, periodStart) {
 // ====== RENDER ======
 
 function render() {
+  try { _render(); } catch(e) { console.error('render error:', e); }
+}
+function _render() {
   const bots = D._bots;
   let h = '';
 
