@@ -659,22 +659,22 @@ function _render() {
     if (!b || b.cash == null || b.portfolio_value == null) { yazlikHasData = false; return; }
     yazlikBalance += b.cash + b.portfolio_value;
   });
-  // Daily rate: only use realized PnL from redeemed periods
+  // Daily rate: avg PnL per 15-min period * 96 periods/day
+  let totalPeriodPnl = 0, totalPeriodCount = 0;
   if (yazlikHasData) {
     yazlikBots.forEach(name => {
       const b = bots[name];
       if (!b || !b.periods || !b.periods.length) return;
       const redeemed = b.periods.filter(p => p.won);
-      if (!redeemed.length) return;
-      const realizedPnl = redeemed.reduce((sum, p) => sum + p.pnl, 0);
-      const oldest = Math.min(...redeemed.map(p => p.period_start));
-      const newest = Math.max(...redeemed.map(p => p.period_start));
-      const days = Math.max((newest - oldest) / 86400, 0.5);
-      yazlikEarnings += realizedPnl / days;
+      totalPeriodPnl += redeemed.reduce((sum, p) => sum + p.pnl, 0);
+      totalPeriodCount += redeemed.length;
     });
   }
+  const avgPer15m = totalPeriodCount > 0 ? totalPeriodPnl / totalPeriodCount : 0;
+  yazlikEarnings = avgPer15m * 96; // 96 fifteen-minute periods per day
   const yazlikRemaining = YAZLIK_PRICE - yazlikBalance;
-  const yazlikDaysLeft = yazlikEarnings > 0 ? Math.ceil(yazlikRemaining / yazlikEarnings) : Infinity;
+  const periodsLeft = avgPer15m > 0 ? Math.ceil(yazlikRemaining / avgPer15m) : Infinity;
+  const yazlikDaysLeft = periodsLeft !== Infinity ? Math.ceil(periodsLeft / 96) : Infinity;
   const yazlikPct = Math.min(100, (yazlikBalance / YAZLIK_PRICE) * 100);
   const yazlikEl = document.getElementById('yazlik');
   if (yazlikEl) {
