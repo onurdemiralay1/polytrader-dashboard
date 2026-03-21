@@ -679,8 +679,8 @@ function _render() {
   const yazlikEl = document.getElementById('yazlik');
   if (yazlikEl) {
     const daysStr = yazlikDaysLeft !== Infinity ? yazlikDaysLeft.toLocaleString() : '...';
-    yazlikEl.innerHTML = `<span style="font-size:14px">🏡</span> <span style="color:var(--orange);font-weight:700">${daysStr}</span><span style="color:var(--dim)"> days to yazlik</span> <span style="color:var(--dim);font-size:10px">($${yazlikEarnings.toFixed(0)}/day)</span>
-      <div style="background:var(--border);border-radius:2px;height:3px;width:120px;margin-top:4px">
+    yazlikEl.innerHTML = `<div style="display:flex;align-items:center;gap:6px"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAQKADAAQAAAABAAAAQAAAAABlmWCKAAAUxklEQVR4Ae1aaZAd1XX+ut8282bVaDQzWme0ghaQAmFzZGSxGpcjDClswKEM2ClS2OaHjQFXEieuQOHgwmDMIlRgh4S4bIcAFbOqAhiELEBsioQG0ILQOpp9fTNv6e583+l+gxDSLIAcquDOdPftu57zneWee/s5ARM+xcn9FPNurH8GwGca8ClH4DMT+JQrAD4ZGvD/uBDH/5Qa8PhTHubPcdFY4SEY9IH8ITiPO3DSlEuJCyflADFeRzwQEp+DAX50ewFrXuIL0/e/FcO5i5j3Anh8+BEOidj7OVWxQwCcyhicCoLifvxgHDkAyFjQU0BrL3DFjT4KBeDOf1yH5u0LcP2dlfjccS7++a+B1X/w8dBrQEMpQbrUwYEgGACGiYOAf046BreGKFFLPq50RAAIeqni3QU8tzuOH93l4YRjgOu/eRMSzlOUKLC3759wxfWnGLO3fM/Fd9Y5uHqehy/UhapgwTl5FJvDgbpDEKIKaUNsYhxAYUVSHHn9nmuUfgfpg/o+IpMPcSPFAgkXQVFCX7l5WmUF2Z5hlBGhUEKc33hMZThDmCpA+k78D8EQHgwAk+kCcTMhXZbagrobqqnTnDD3Q4sgV/egCOLD/jHn18ccC4h//kd/gMgE++jI4shZ9pwJHF95M/+qdeA/4PkKT4enqnsT0AAAAASUVORK5CYII=" style="width:18px;height:18px"> <span style="color:var(--orange);font-weight:700">${daysStr}</span><span style="color:var(--dim)"> days to yazlik</span> <span style="color:var(--dim);font-size:10px">($${yazlikEarnings.toFixed(0)}/day)</span></div>
+      <div style="background:var(--border);border-radius:2px;height:3px;width:100%;margin-top:3px">
         <div style="background:linear-gradient(90deg,var(--green),var(--orange));height:100%;width:${yazlikPct}%;border-radius:2px"></div>
       </div>`;
   }
