@@ -701,7 +701,10 @@ function render() {
     const shortTitle = currentTitle.replace('Bitcoin Up or Down - ','').replace(/ ET$/,'');
 
     const lpGlobal = livePrices && livePrices.slug === currentSlug ? livePrices : null;
-    const priceLabel = lpGlobal ? `<span class="live-dot"></span>Up ${lpGlobal.up.toFixed(3)} / Down ${lpGlobal.down.toFixed(3)}` : '';
+    const lpParts = [];
+    if (lpGlobal && lpGlobal.up != null) lpParts.push(`Up ${lpGlobal.up.toFixed(3)}`);
+    if (lpGlobal && lpGlobal.down != null) lpParts.push(`Down ${lpGlobal.down.toFixed(3)}`);
+    const priceLabel = lpParts.length ? `<span class="live-dot"></span>${lpParts.join(' / ')}` : '';
 
     h += `<div class="cur-section">
       <div class="cur-hdr">
