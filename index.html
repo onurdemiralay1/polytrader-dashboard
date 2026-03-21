@@ -502,10 +502,18 @@ function getAdjustedPnl(b, period) {
   }
   if (!b.metrics[period]) return 0;
   let pnl = b.metrics[period].pnl;
+  // Only adjust for unredeemed periods that fall within this time bucket
+  const now = Date.now()/1000;
+  const cutoffs = {
+    '1h': now - 3600,
+    '24h': now - 86400,
+    'today': new Date(new Date().toISOString().slice(0,10) + 'T00:00:00Z').getTime()/1000,
+    'all': 0,
+  };
+  const cutoff = cutoffs[period] || 0;
   if (b.pos_pnl && b.periods) {
     b.periods.forEach(p => {
-      // Use positions PnL when no redeem yet (won=false), even if period is time-resolved
-      if (!p.won && b.pos_pnl[p.slug] != null) {
+      if (!p.won && p.period_start >= cutoff && b.pos_pnl[p.slug] != null) {
         pnl += (b.pos_pnl[p.slug] - p.pnl);
       }
     });
