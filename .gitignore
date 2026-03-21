@@ -1,6 +1,7 @@
 # Ignore everything
 *
 
-# Except the dashboard and this file
+# Except the dashboard, assets, and this file
 !index.html
+!yazlik.svg
 !.gitignore

@@ -659,13 +659,14 @@ function _render() {
     if (!b || b.cash == null || b.portfolio_value == null) { yazlikHasData = false; return; }
     yazlikBalance += b.cash + b.portfolio_value;
   });
-  // Daily rate: avg PnL per 15-min period * 96 periods/day
+  // Daily rate: avg PnL per 15-min period (last 7 days) * 96 periods/day
   let totalPeriodPnl = 0, totalPeriodCount = 0;
+  const weekAgo = Date.now()/1000 - 7*86400;
   if (yazlikHasData) {
     yazlikBots.forEach(name => {
       const b = bots[name];
       if (!b || !b.periods || !b.periods.length) return;
-      const redeemed = b.periods.filter(p => p.won);
+      const redeemed = b.periods.filter(p => p.won && p.period_start >= weekAgo);
       totalPeriodPnl += redeemed.reduce((sum, p) => sum + p.pnl, 0);
       totalPeriodCount += redeemed.length;
     });
@@ -679,7 +680,7 @@ function _render() {
   const yazlikEl = document.getElementById('yazlik');
   if (yazlikEl) {
     const daysStr = yazlikDaysLeft !== Infinity ? yazlikDaysLeft.toLocaleString() : '...';
-    yazlikEl.innerHTML = `<div style="display:flex;align-items:center;gap:6px"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAQKADAAQAAAABAAAAQAAAAABlmWCKAAAUxklEQVR4Ae1aaZAd1XX+ut8282bVaDQzWme0ghaQAmFzZGSxGpcjDClswKEM2ClS2OaHjQFXEieuQOHgwmDMIlRgh4S4bIcAFbOqAhiELEBsioQG0ILQOpp9fTNv6e583+l+gxDSLIAcquDOdPftu57zneWee/s5ARM+xcn9FPNurH8GwGca8ClH4DMT+JQrAD4ZGvD/uBDH/5Qa8PhTHubPcdFY4SEY9IH8ITiPO3DSlEuJCyflADFeRzwQEp+DAX50ewFrXuIL0/e/FcO5i5j3Anh8+BEOidj7OVWxQwCcyhicCoLifvxgHDkAyFjQU0BrL3DFjT4KBeDOf1yH5u0LcP2dlfjccS7++a+B1X/w8dBrQEMpQbrUwYEgGACGiYOAf046BreGKFFLPq50RAAIeqni3QU8tzuOH93l4YRjgOu/eRMSzlOUKLC3759wxfWnGLO3fM/Fd9Y5uHqehy/UhapgwTl5FJvDgbpDEKIKaUNsYhxAYUVSHHn9nmuUfgfpg/o+IpMPcSPFAgkXQVFCX7l5WmUF2Z5hlBGhUEKc33hMZThDmCpA+k78D8EQHgwAk+kCcTMhXZbagrobqqnTnDD3Q4sgV/egCOLD/jHn18ccC4h//kd/gMgE++jI4shZ9pwJHF95M/+qdeA/4PkKT4enqnsT0AAAAASUVORK5CYII=" style="width:18px;height:18px"> <span style="color:var(--orange);font-weight:700">${daysStr}</span><span style="color:var(--dim)"> days to yazlik</span> <span style="color:var(--dim);font-size:10px">($${yazlikEarnings.toFixed(0)}/day)</span></div>
+    yazlikEl.innerHTML = `<div style="display:flex;align-items:center;gap:6px"><img src="yazlik.svg" style="width:20px;height:20px"> <span style="color:var(--orange);font-weight:700">${daysStr}</span><span style="color:var(--dim)"> days to yazlik</span> <span style="color:var(--dim);font-size:10px">($${yazlikEarnings.toFixed(0)}/day)</span></div>
       <div style="background:var(--border);border-radius:2px;height:3px;width:100%;margin-top:3px">
         <div style="background:linear-gradient(90deg,var(--green),var(--orange));height:100%;width:${yazlikPct}%;border-radius:2px"></div>
       </div>`;
