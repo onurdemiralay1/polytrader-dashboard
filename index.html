@@ -101,6 +101,7 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',mo
 
 <div class="hdr">
   <h1>Polytrader Live</h1>
+  <div id="yazlik" style="font-size:13px"></div>
   <div class="st">
     <span class="dot"></span>
     <span id="st-txt">Loading...</span>
@@ -648,17 +649,16 @@ function _render() {
   const bots = D._bots;
   let h = '';
 
-  // Yazlik tracker
+  // Yazlik tracker — update header
   const YAZLIK_PRICE = 200000;
   const yazlikBots = ['iphone1','AWS','Stop4'];
   let yazlikBalance = 0, yazlikHasData = true;
-  let yazlikEarnings = 0, yazlikDays = 0;
+  let yazlikEarnings = 0;
   yazlikBots.forEach(name => {
     const b = bots[name];
     if (!b || b.cash == null || b.portfolio_value == null) { yazlikHasData = false; return; }
     yazlikBalance += b.cash + b.portfolio_value;
   });
-  // Daily rate: use all-time PnL / number of days of data
   if (yazlikHasData) {
     yazlikBots.forEach(name => {
       const b = bots[name];
@@ -672,22 +672,11 @@ function _render() {
   }
   const yazlikRemaining = YAZLIK_PRICE - yazlikBalance;
   const yazlikDaysLeft = yazlikEarnings > 0 ? Math.ceil(yazlikRemaining / yazlikEarnings) : Infinity;
-  const yazlikPct = Math.min(100, (yazlikBalance / YAZLIK_PRICE) * 100);
-  const yazlikYears = yazlikDaysLeft !== Infinity ? (yazlikDaysLeft / 365).toFixed(1) : '?';
-
-  h += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:14px 20px;margin-bottom:14px;text-align:center">
-    <div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Yazlik Tracker</div>
-    <div style="font-size:28px;font-weight:700;color:var(--orange);margin-bottom:4px">${yazlikDaysLeft !== Infinity ? yazlikDaysLeft.toLocaleString() + ' days' : '...'}</div>
-    <div style="font-size:11px;color:var(--dim);margin-bottom:8px">${yazlikYears} years at $${yazlikEarnings.toFixed(0)}/day</div>
-    <div style="background:var(--bg);border-radius:4px;height:8px;overflow:hidden;margin-bottom:6px">
-      <div style="background:linear-gradient(90deg,var(--green),var(--orange));height:100%;width:${yazlikPct}%;border-radius:4px;transition:width .5s"></div>
-    </div>
-    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--dim)">
-      <span>$${yazlikBalance.toFixed(0)} saved</span>
-      <span>${yazlikPct.toFixed(3)}%</span>
-      <span>$${(YAZLIK_PRICE/1000).toFixed(0)}k goal</span>
-    </div>
-  </div>`;
+  const yazlikEl = document.getElementById('yazlik');
+  if (yazlikEl) {
+    const daysStr = yazlikDaysLeft !== Infinity ? yazlikDaysLeft.toLocaleString() : '...';
+    yazlikEl.innerHTML = `<span style="color:var(--orange);font-weight:700">${daysStr}</span><span style="color:var(--dim)"> days to yazlik</span> <span style="color:var(--dim);font-size:10px">($${yazlikEarnings.toFixed(0)}/day)</span>`;
+  }
 
   // Summary cards
   h += '<div class="strip">';
