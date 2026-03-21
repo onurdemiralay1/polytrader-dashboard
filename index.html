@@ -896,15 +896,19 @@ function render() {
   h += '<div class="note">PnL uses positions API for unresolved periods (live market value).</div>';
   h += '</div>';
 
-  // Cumulative PnL sparkline per bot
-  h += '<div class="ptable-wrap"><div class="ptable-hdr">Cumulative PnL (resolved periods)</div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)">';
+  // Cumulative PnL sparkline per bot (uses same filtered periods as table)
+  h += '<div class="ptable-wrap"><div class="ptable-hdr">Cumulative PnL</div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)">';
   BOT_ORDER.forEach(name => {
     const b = bots[name];
     if (!b || !b.periods) { h += '<div style="background:var(--surface);padding:16px;color:var(--dim)">No data</div>'; return; }
-    const resolved = b.periods.filter(p => p.resolved).slice().reverse();
-    if (!resolved.length) { h += `<div style="background:var(--surface);padding:16px;color:var(--dim)">${name}: no resolved</div>`; return; }
+    const resolved = filteredPeriods.filter(pp => pp.bots[name]).slice().reverse();
+    if (!resolved.length) { h += `<div style="background:var(--surface);padding:16px;color:var(--dim)">${name}: no data</div>`; return; }
     let cum = 0;
-    const pts = resolved.map(p => { cum += p.pnl; return {pnl: cum}; });
+    const pts = resolved.map(pp => {
+      const bp = pp.bots[name];
+      cum += getPeriodPnl(b, pp.slug, bp.pnl, bp.resolved, bp.won);
+      return {pnl: cum};
+    });
     const maxC = Math.max(...pts.map(p=>p.pnl), 0);
     const minC = Math.min(...pts.map(p=>p.pnl), 0);
     const range = Math.max(maxC - minC, 1);
