@@ -542,6 +542,38 @@ const $ = v => v >= 0 ? '+' : '';
 const fmt = v => { v = v || 0; return $(v) + '$' + Math.abs(v).toFixed(2); };
 const fmtBig = v => { v = v || 0; return $(v) + '$' + Math.abs(v).toFixed(v >= 100 || v <= -100 ? 0 : 2); };
 const cls = v => (v || 0) >= 0 ? 'pos' : 'neg';
+
+// Get per-period PnLs for a bot within current time filter
+function getFilteredPeriodPnls(b) {
+  if (!b || !b.periods) return [];
+  const now = Date.now()/1000;
+  let cutoff = 0, toTs = Infinity;
+  if (period === 'custom') {
+    if (!customFrom || !customTo) return [];
+    cutoff = customFrom.getTime()/1000;
+    toTs = customTo.getTime()/1000;
+  } else {
+    const cutoffs = {'1h':now-3600,'24h':now-86400,'today':new Date(new Date().toISOString().slice(0,10)+'T00:00:00Z').getTime()/1000,'all':0};
+    cutoff = cutoffs[period] || 0;
+  }
+  return b.periods
+    .filter(p => p.period_start >= cutoff && p.period_start <= toTs)
+    .map(p => getPeriodPnl(b, p.slug, p.pnl, p.resolved, p.won));
+}
+
+function calcKpis(pnls) {
+  if (!pnls.length) return {winRate:0, sharpe:0, avgWin:0, avgLoss:0, periods:0};
+  const wins = pnls.filter(v => v > 0);
+  const losses = pnls.filter(v => v <= 0);
+  const winRate = wins.length / pnls.length;
+  const avgWin = wins.length ? wins.reduce((a,b)=>a+b,0)/wins.length : 0;
+  const avgLoss = losses.length ? losses.reduce((a,b)=>a+b,0)/losses.length : 0;
+  const mean = pnls.reduce((a,b)=>a+b,0) / pnls.length;
+  const variance = pnls.reduce((s,v) => s + (v-mean)*(v-mean), 0) / pnls.length;
+  const std = Math.sqrt(variance);
+  const sharpe = std > 0 ? (mean / std) * Math.sqrt(96) : 0; // annualized to daily (96 periods/day)
+  return {winRate, sharpe, avgWin, avgLoss, periods: pnls.length};
+}
 const hm = ts => new Date(ts*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
 const ago = ts => {
   const d = Date.now()/1000 - ts;
@@ -701,14 +733,20 @@ function _render() {
     const cash = b.cash != null ? `$${b.cash.toFixed(0)}` : '?';
     const portVal = b.portfolio_value != null ? `$${b.portfolio_value.toFixed(0)}` : '?';
     const totalVal = (b.cash != null && b.portfolio_value != null) ? `$${(b.cash + b.portfolio_value).toFixed(0)}` : '?';
+    const kpi = calcKpis(getFilteredPeriodPnls(b));
 
     h += `<div class="scard" style="--c:${b.color}">
       <div class="nm">${name} <span class="badge ${sc}">${st} ${ago(b.last_active)}</span></div>
       <div class="pnl ${cls(adjPnl)}">${fmtBig(adjPnl)}</div>
       <div class="row">
         <span><b>${displayTrades}</b> trades</span>
-        <span><b>${m.redeems}</b> redeems</span>
+        <span><b>${kpi.periods}</b> periods</span>
         <span>vol <b>$${m.volume.toFixed(0)}</b></span>
+      </div>
+      <div class="row" style="margin-top:3px">
+        <span>WR <b>${(kpi.winRate*100).toFixed(0)}%</b></span>
+        <span>Sharpe <b>${kpi.sharpe.toFixed(2)}</b></span>
+        <span>W/L <b class="pos">$${kpi.avgWin.toFixed(1)}</b>/<b class="neg">$${Math.abs(kpi.avgLoss).toFixed(1)}</b></span>
       </div>
       <div class="bal-row">
         <span>Cash <b>${cash}</b></span>
