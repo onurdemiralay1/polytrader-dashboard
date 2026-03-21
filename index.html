@@ -737,16 +737,17 @@ function _render() {
 
     h += `<div class="scard" style="--c:${b.color}">
       <div class="nm">${name} <span class="badge ${sc}">${st} ${ago(b.last_active)}</span></div>
-      <div class="pnl ${cls(adjPnl)}">${fmtBig(adjPnl)}</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <div class="pnl ${cls(adjPnl)}">${fmtBig(adjPnl)}</div>
+        <div style="text-align:right;font-size:10px;color:var(--dim);line-height:1.5">
+          <div>WR <b style="color:var(--text)">${(kpi.winRate*100).toFixed(0)}%</b></div>
+          <div>Sharpe <b style="color:var(--text)">${kpi.sharpe.toFixed(2)}</b></div>
+        </div>
+      </div>
       <div class="row">
         <span><b>${displayTrades}</b> trades</span>
         <span><b>${kpi.periods}</b> periods</span>
         <span>vol <b>$${m.volume.toFixed(0)}</b></span>
-      </div>
-      <div class="row" style="margin-top:3px">
-        <span>WR <b>${(kpi.winRate*100).toFixed(0)}%</b></span>
-        <span>Sharpe <b>${kpi.sharpe.toFixed(2)}</b></span>
-        <span>W/L <b class="pos">$${kpi.avgWin.toFixed(1)}</b>/<b class="neg">$${Math.abs(kpi.avgLoss).toFixed(1)}</b></span>
       </div>
       <div class="bal-row">
         <span>Cash <b>${cash}</b></span>
