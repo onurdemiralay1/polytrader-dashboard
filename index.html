@@ -680,7 +680,7 @@ function _render() {
   const yazlikEl = document.getElementById('yazlik');
   if (yazlikEl) {
     const daysStr = yazlikDaysLeft !== Infinity ? yazlikDaysLeft.toLocaleString() : '...';
-    yazlikEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px"><span style="color:var(--orange);font-weight:700">${daysStr}</span><span style="color:var(--dim)"> days to yazlik</span> <span style="color:var(--dim);font-size:10px">($${yazlikEarnings.toFixed(0)}/day)</span><img src="villa-small.png" style="height:32px;border-radius:3px;opacity:0.85"></div>
+    yazlikEl.innerHTML = `<div style="display:flex;align-items:center;gap:6px"><img src="yazlik-icon.png" style="width:18px;height:18px"> <span style="color:var(--orange);font-weight:700">${daysStr}</span><span style="color:var(--dim)"> days to yazlik</span> <span style="color:var(--dim);font-size:10px">($${yazlikEarnings.toFixed(0)}/day)</span></div>
       <div style="background:var(--border);border-radius:2px;height:3px;width:100%;margin-top:3px">
         <div style="background:linear-gradient(90deg,var(--green),var(--orange));height:100%;width:${yazlikPct}%;border-radius:2px"></div>
       </div>`;
