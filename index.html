@@ -500,9 +500,8 @@ function getAdjustedPnl(b, period) {
     });
     return pnl;
   }
-  if (!b.metrics[period]) return 0;
-  let pnl = b.metrics[period].pnl;
-  // Only adjust for unredeemed periods that fall within this time bucket
+  // Sum per-period PnLs within the time range (consistent with table)
+  if (!b.periods) return 0;
   const now = Date.now()/1000;
   const cutoffs = {
     '1h': now - 3600,
@@ -511,13 +510,12 @@ function getAdjustedPnl(b, period) {
     'all': 0,
   };
   const cutoff = cutoffs[period] || 0;
-  if (b.pos_pnl && b.periods) {
-    b.periods.forEach(p => {
-      if (!p.won && p.period_start >= cutoff && b.pos_pnl[p.slug] != null) {
-        pnl += (b.pos_pnl[p.slug] - p.pnl);
-      }
-    });
-  }
+  let pnl = 0;
+  b.periods.forEach(p => {
+    if (p.period_start >= cutoff) {
+      pnl += getPeriodPnl(b, p.slug, p.pnl, p.resolved, p.won);
+    }
+  });
   return pnl;
 }
 
@@ -816,10 +814,21 @@ function render() {
   h += `<th>Best</th><th style="color:var(--blue)">${cmpA} - ${cmpB}</th></tr>`;
 
   let cmpTotal = 0, cmpCount = 0;
+  // Filter periods by selected time range
+  const nowTs = Date.now()/1000;
+  const periodCutoffs = {
+    '1h': nowTs - 3600,
+    '24h': nowTs - 86400,
+    'today': new Date(new Date().toISOString().slice(0,10) + 'T00:00:00Z').getTime()/1000,
+    'all': 0,
+  };
   let filteredPeriods = sorted;
   if (period === 'custom' && customFrom && customTo) {
     const fromTs = customFrom.getTime()/1000, toTs = customTo.getTime()/1000;
     filteredPeriods = sorted.filter(pp => pp.start >= fromTs && pp.start <= toTs);
+  } else if (periodCutoffs[period] != null) {
+    const cutoff = periodCutoffs[period];
+    filteredPeriods = sorted.filter(pp => pp.start >= cutoff);
   }
   filteredPeriods.slice(0, 80).forEach(pp => {
     const short = (pp.title || pp.slug).replace('Bitcoin Up or Down - ','').replace(/ ET$/,'');
