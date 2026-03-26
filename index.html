@@ -359,22 +359,24 @@ function processPositions(positions) {
     });
   });
 
-  const pnlBySlug = {};
+  // Track redeemable value per slug (for unredeemed resolved markets)
+  const redeemBySlug = {};
   (positions || []).forEach(p => {
     const slug = p.slug || '';
-    if (slug && (parseFloat(p.size||0)||0) > 0) {
-      pnlBySlug[slug] = (pnlBySlug[slug] || 0) + (parseFloat(p.cashPnl||0)||0);
+    const curVal = (parseFloat(p.currentValue||0)||0);
+    if (slug && p.redeemable && curVal > 0) {
+      redeemBySlug[slug] = (redeemBySlug[slug] || 0) + curVal;
     }
   });
-  const roundedPnl = {};
-  Object.entries(pnlBySlug).forEach(([k,v]) => { roundedPnl[k] = Math.round(v*100)/100; });
+  const roundedRedeem = {};
+  Object.entries(redeemBySlug).forEach(([k,v]) => { roundedRedeem[k] = Math.round(v*100)/100; });
 
   return {
     portfolio_value: Math.round(totalValue*100)/100,
     portfolio_cost: Math.round(totalCost*100)/100,
     unrealized_pnl: Math.round((totalValue - totalCost)*100)/100,
     positions: active,
-    pnl_by_slug: roundedPnl,
+    redeem_by_slug: roundedRedeem,
   };
 }
 
@@ -401,7 +403,7 @@ async function refreshAll() {
       data.positions = posData.positions;
       data.portfolio_value = posData.portfolio_value;
       data.unrealized_pnl = posData.unrealized_pnl;
-      data.pos_pnl = posData.pnl_by_slug;
+      data.redeem_by_slug = posData.redeem_by_slug;
       data.cash = balances[name] != null ? balances[name] : null;
       return {name, data};
     }));
@@ -529,11 +531,11 @@ function getCustomTrades(b) {
 }
 
 function getPeriodPnl(b, slug, activityPnl, resolved, won) {
-  // Use positions PnL when no redeem in activity data yet.
-  // "resolved" means period ended (time-based), but shares may not be redeemed yet.
-  // Positions API knows the correct PnL including unredeemed winning shares.
-  if (!won && b && b.pos_pnl && b.pos_pnl[slug] != null) {
-    return b.pos_pnl[slug];
+  // For unredeemed resolved markets: activityPnl is missing the redeem value.
+  // Add redeemable position value (winning tokens * $1) to the activity-based PnL.
+  // We don't use positions API cashPnl because it has zero cost basis for these markets.
+  if (!won && b && b.redeem_by_slug && b.redeem_by_slug[slug] != null) {
+    return Math.round((activityPnl + b.redeem_by_slug[slug]) * 100) / 100;
   }
   return activityPnl;
 }
@@ -923,7 +925,7 @@ function _render() {
       if (!bp) return;
       const b = bots[n];
       displayPnl[n] = getPeriodPnl(b, pp.slug, bp.pnl, bp.resolved, bp.won);
-      if ((bp.resolved || (b?.pos_pnl && b.pos_pnl[pp.slug] != null)) && displayPnl[n] > bestPnl) {
+      if ((bp.resolved || (b?.redeem_by_slug && b.redeem_by_slug[pp.slug] != null)) && displayPnl[n] > bestPnl) {
         bestPnl = displayPnl[n]; bestName = n; anyResolved = true;
       }
     });
@@ -934,7 +936,7 @@ function _render() {
       if (!bp) { h += '<td style="color:var(--dim)">-</td>'; return; }
       const dpnl = displayPnl[n] != null ? displayPnl[n] : bp.pnl;
       const isWinner = anyResolved && n === bestName;
-      const hasPos = !bp.resolved && bots[n]?.pos_pnl && bots[n].pos_pnl[pp.slug] != null;
+      const hasPos = !bp.resolved && bots[n]?.redeem_by_slug && bots[n].redeem_by_slug[pp.slug] != null;
       const c = (bp.resolved || hasPos) ? cls(dpnl) : '';
       const star = bp.resolved ? '' : (hasPos ? '' : ' *');
       h += `<td class="${c}${isWinner?' winner':''}">${fmt(dpnl)}${star}<span class="t-count">${bp.trades}t</span></td>`;
