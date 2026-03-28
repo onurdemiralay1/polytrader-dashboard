@@ -117,7 +117,7 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',mo
 <div class="hdr">
   <div style="display:flex;align-items:center">
     <h1>Taker 5min</h1>
-    <span class="badge">PAPER</span>
+    <span class="badge" id="mode-badge">PAPER</span>
   </div>
   <div class="api-input" id="api-cfg" style="display:none">
     <span style="color:var(--dim);font-size:10px">API:</span>
@@ -221,6 +221,8 @@ function getOnurPeriods() {
 
 function render() {
   if (!state) return;
+  const lat = state.latency_ms || 0;
+  $('mode-badge').textContent = lat > 0 ? `PAPER +${lat}ms` : 'PAPER (instant)';
   renderH2H();
   renderCurrentPeriod();
   renderCumChart();
@@ -254,7 +256,7 @@ function renderH2H() {
       <div class="h2h-item"><div class="k">PnL</div><div class="v ${pnlClass(h2hCount > 0 ? ourH2H.pnl : state.total_pnl)}">${fmtPnl(h2hCount > 0 ? ourH2H.pnl : state.total_pnl)}</div></div>
       <div class="h2h-item"><div class="k">Win Rate</div><div class="v">${h2hCount > 0 ? (100*ourH2H.wins/h2hCount).toFixed(1) : state.win_rate}%</div></div>
       <div class="h2h-item"><div class="k">$/period</div><div class="v ${pnlClass(h2hCount > 0 ? ourH2H.pnl : state.total_pnl)}">${h2hCount > 0 ? fmtPnl(ourH2H.pnl/h2hCount) : (state.periods_resolved ? fmtPnl(state.total_pnl/state.periods_resolved) : '-')}</div></div>
-      <div class="h2h-item"><div class="k">Deployed</div><div class="v">$${h2hCount > 0 ? Math.round(ourH2H.cost) : state.total_buys*10}</div><div class="s">Balance: $${fmt(state.balance)}</div></div>
+      <div class="h2h-item"><div class="k">Deployed</div><div class="v">$${h2hCount > 0 ? Math.round(ourH2H.cost) : state.total_buys*10}</div><div class="s">Fees: $${fmt(state.total_fees||0)} | Lat: ${state.latency_ms||0}ms</div></div>
     </div>
   </div>`;
 
