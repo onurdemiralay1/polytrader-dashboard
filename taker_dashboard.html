@@ -265,6 +265,9 @@ function renderH2H() {
   let onurCard = '';
   if (onur.name) {
     const pnlPer = onurRes > 0 ? onur.total_pnl / onurRes : 0;
+    const cash = onur.cash != null ? `$${onur.cash.toLocaleString()}` : '?';
+    const portVal = onur.portfolio_value != null ? `$${onur.portfolio_value.toLocaleString()}` : '?';
+    const walletVal = onur.wallet_value != null ? `$${onur.wallet_value.toLocaleString()}` : '?';
     onurCard = `<div class="h2h-card" style="--c:var(--cyan)">
       <div class="name"><span>${onur.name} <span style="color:var(--dim);font-weight:400">${onur.addr}</span></span><span class="tag" style="background:rgba(34,211,238,.12);color:var(--cyan)">${onurRes} h2h periods</span></div>
       <div class="h2h-grid">
@@ -272,6 +275,11 @@ function renderH2H() {
         <div class="h2h-item"><div class="k">Win Rate</div><div class="v">${onur.win_rate}%</div></div>
         <div class="h2h-item"><div class="k">$/period</div><div class="v ${pnlClass(pnlPer)}">${fmtPnl(pnlPer)}</div></div>
         <div class="h2h-item"><div class="k">Deployed</div><div class="v">$${onur.total_cost?.toLocaleString() || '?'}</div><div class="s">${onur.n_trades} trades, ~60sh each</div></div>
+      </div>
+      <div style="display:flex;gap:16px;font-size:10px;color:var(--dim);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">
+        <span>Cash: <b style="color:var(--text)">${cash}</b></span>
+        <span>Positions: <b style="color:var(--text)">${portVal}</b></span>
+        <span>Wallet: <b style="color:var(--cyan)">${walletVal}</b></span>
       </div>
     </div>`;
   } else {

@@ -42,6 +42,49 @@ COMPETITOR_WALLETS = [
     {"name": "Onur", "addr": "0xe0229E10A858860218B6132F4234602C47bD6603"},
 ]
 
+# On-chain balance lookup
+USDC_E = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+RPC_URLS = ["https://polygon.gateway.tenderly.co", "https://polygon.drpc.org"]
+
+
+def fetch_usdc_balance(address):
+    """Fetch USDC.e balance via Polygon RPC."""
+    addr_padded = "000000000000000000000000" + address[2:].lower()
+    data = "0x70a08231" + addr_padded
+    payload = json.dumps({"jsonrpc": "2.0", "method": "eth_call",
+                          "params": [{"to": USDC_E, "data": data}, "latest"], "id": 1}).encode()
+    for rpc_url in RPC_URLS:
+        try:
+            req = urllib.request.Request(rpc_url, data=payload,
+                                         headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read())
+            return round(int(result["result"], 16) / 1e6, 2)
+        except Exception:
+            pass
+    return None
+
+
+def fetch_positions(address):
+    """Fetch current positions from Polymarket data API."""
+    url = f"https://data-api.polymarket.com/positions?user={address}"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read())
+    except Exception:
+        return []
+
+
+def calc_portfolio_value(positions):
+    """Sum currentValue of all active positions."""
+    total = 0.0
+    for p in positions:
+        size = float(p.get("size", 0) or 0)
+        if size > 0:
+            total += float(p.get("currentValue", 0) or 0)
+    return round(total, 2)
+
 _cache = {"data": None, "ts": 0}
 _comp_cache = {"data": None, "ts": 0}
 
@@ -121,7 +164,8 @@ def simulate_period(sigs, snapshots=None, latency_ms=DEFAULT_LATENCY_MS):
     price at signal_time + latency_ms (what you'd actually fill at).
     """
     trades = []
-    up_pos = down_pos = 0.0
+    up_pos = down_pos = 0.0  # cost accumulators
+    up_shares = down_shares = 0.0  # share accumulators for net position limit
     total_fees = 0.0
 
     # Build book timeline for latency look-ahead
@@ -153,22 +197,24 @@ def simulate_period(sigs, snapshots=None, latency_ms=DEFAULT_LATENCY_MS):
         if sz < ORDER_SIZE:
             continue
 
-        # Net position check
-        net_pos = up_pos - down_pos
-        if side == "UP" and net_pos >= MAX_NET_POSITION:
+        # Net position check (in shares)
+        net_shares = up_shares - down_shares
+        if side == "UP" and net_shares >= MAX_NET_POSITION:
             continue
-        if side == "DOWN" and net_pos <= -MAX_NET_POSITION:
+        if side == "DOWN" and net_shares <= -MAX_NET_POSITION:
             continue
 
-        tokens = ORDER_SIZE / ask
+        tokens = ORDER_SIZE  # ORDER_SIZE is in shares (like Onur's 60-share batches)
         fee = calc_fee(ask, tokens)
-        cost = ORDER_SIZE + fee
+        cost = tokens * ask + fee
         total_fees += fee
 
         if side == "UP":
-            up_pos += ORDER_SIZE
+            up_pos += cost
+            up_shares += tokens
         else:
-            down_pos += ORDER_SIZE
+            down_pos += cost
+            down_shares += tokens
 
         sig_remaining = float(s.get("remaining", 0))
         fill_ts = signal_ts + latency_ms
@@ -231,8 +277,8 @@ def build_state(latency_ms=DEFAULT_LATENCY_MS):
     max_dd = 0.0
 
     total_fees_all = 0.0
-    for pid in sorted(signals_by_period):
-        sigs = signals_by_period[pid]
+    for pid in all_pids:
+        sigs = signals_by_period.get(pid, [])
         snaps = snapshot_rows.get(pid, [])
         trades, period_fees = simulate_period(sigs, snapshots=snaps, latency_ms=latency_ms)
         total_fees_all += period_fees
@@ -429,6 +475,11 @@ def build_competitors():
         last_ts = max(by_period.keys()) if by_period else 0
         last_dt = datetime.fromtimestamp(last_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M") if last_ts else "?"
 
+        # Wallet value: cash + positions
+        cash = fetch_usdc_balance(w["addr"])
+        raw_positions = fetch_positions(w["addr"])
+        portfolio_value = calc_portfolio_value(raw_positions)
+
         result.append({
             "name": w["name"],
             "addr": w["addr"][:10] + "...",
@@ -442,6 +493,9 @@ def build_competitors():
             "win_rate": round(100 * wins / resolved, 1) if resolved else 0,
             "max_drawdown": round(max_dd, 2),
             "last_active": last_dt,
+            "cash": cash,
+            "portfolio_value": portfolio_value,
+            "wallet_value": round((cash or 0) + portfolio_value, 2),
             "periods": periods,
         })
 
