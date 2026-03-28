@@ -341,29 +341,29 @@ function renderCurrentPeriod() {
         <span class="buys">${trades.length} buys | $${totalCost.toFixed(0)} deployed</span>
       </div>
       <table class="pos-cmp-tbl">
-        <tr><th></th><th>#</th><th>Cost</th><th>Avg</th><th>Tokens</th><th>Value</th></tr>
+        <tr><th></th><th>#</th><th>Tokens</th><th>Avg</th><th>Cost</th><th>Value</th></tr>
         <tr>
           <td class="side-up">UP</td>
           <td class="val">${upT.length}</td>
-          <td class="val">$${upCost.toFixed(0)}</td>
-          <td class="dim">${upT.length ? upAvg.toFixed(3) : '-'}</td>
           <td class="val">${upTokens.toFixed(1)}</td>
+          <td class="dim">${upT.length ? upAvg.toFixed(3) : '-'}</td>
+          <td class="val">$${upCost.toFixed(0)}</td>
           <td class="${upVal != null && upVal >= upCost ? 'pos' : 'neg'}">${upVal != null ? '$'+upVal.toFixed(1) : '-'}</td>
         </tr>
         <tr>
           <td class="side-dn">DN</td>
           <td class="val">${dnT.length}</td>
-          <td class="val">$${dnCost.toFixed(0)}</td>
-          <td class="dim">${dnT.length ? dnAvg.toFixed(3) : '-'}</td>
           <td class="val">${dnTokens.toFixed(1)}</td>
+          <td class="dim">${dnT.length ? dnAvg.toFixed(3) : '-'}</td>
+          <td class="val">$${dnCost.toFixed(0)}</td>
           <td class="${dnVal != null && dnVal >= dnCost ? 'pos' : 'neg'}">${dnVal != null ? '$'+dnVal.toFixed(1) : '-'}</td>
         </tr>
         <tr class="tot-row">
           <td></td>
           <td class="val">${trades.length}</td>
+          <td></td>
+          <td></td>
           <td class="val">$${totalCost.toFixed(0)}</td>
-          <td></td>
-          <td></td>
           <td class="${pnlEst != null ? (pnlEst >= 0 ? 'pos' : 'neg') : ''}">${pnlEst != null ? (pnlEst >= 0 ? '+' : '') + '$'+pnlEst.toFixed(1) : '-'}</td>
         </tr>
       </table>
