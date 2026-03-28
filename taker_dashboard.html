@@ -488,7 +488,8 @@ function buildChart(snaps, ourTrades, onurTrades, K) {
     const isUp = t.side === 'UP';
     const color = isUp ? '#4ade80' : '#f87171';
     const dy = isUp ? -10 : 10;
-    const labelY = isUp ? y + dy - 4 : y + dy + 12;
+    const markerTop = isUp ? y + dy : y + dy - 7;
+    const labelY = markerTop - 4;
     const price = t.ask != null ? t.ask.toFixed(2) : '';
     let shape;
     if (isUp) {
@@ -506,7 +507,8 @@ function buildChart(snaps, ourTrades, onurTrades, K) {
     const y = toY(btcAt(t.remaining));
     const isUp = t.side === 'UP';
     const dy = isUp ? -16 : 16;
-    const labelY = isUp ? y + dy - 8 : y + dy + 14;
+    const markerTop = y + dy - (isUp ? 0 : 3);
+    const labelY = markerTop - 6;
     const price = t.ask != null ? t.ask.toFixed(2) : '';
     let shape;
     if (isUp) {
