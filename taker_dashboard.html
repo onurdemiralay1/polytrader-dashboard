@@ -108,6 +108,12 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',mo
 
 .empty{text-align:center;padding:40px;color:var(--dim);font-size:13px}
 .legend{display:flex;gap:12px;font-size:9px;color:var(--dim);margin-bottom:4px}
+.tog{display:inline-flex;align-items:center;gap:3px;cursor:pointer;user-select:none;opacity:.5;transition:opacity .15s}
+.tog.on{opacity:1}
+.tog .pip{width:18px;height:10px;border-radius:5px;border:1px solid var(--border2);position:relative;transition:background .15s}
+.tog.on .pip{background:var(--c)}
+.tog .pip::after{content:'';position:absolute;width:6px;height:6px;border-radius:50%;background:var(--dim);top:1px;left:1px;transition:left .15s,background .15s}
+.tog.on .pip::after{left:9px;background:#fff}
 
 .api-input{display:flex;gap:6px;align-items:center}
 .api-input input{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:3px 8px;border-radius:3px;font:inherit;font-size:10px;width:200px}
@@ -176,6 +182,8 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',mo
 const MAX_POS = 100;
 let state = null;
 let compData = null; // will hold single Onur wallet object
+let showBtc = true;
+let showUp = false;
 let apiUrl = localStorage.getItem('taker5m_api') || 'http://54.194.33.93:8765';
 document.getElementById('api-url').value = apiUrl;
 
@@ -314,7 +322,7 @@ function renderCurrentPeriod() {
     if (op && op.trades) onurTrades = op.trades;
   }
 
-  const chart = buildChart(snaps, trades, onurTrades, K);
+  const chart = buildChart(snaps, trades, onurTrades, K, showBtc, showUp);
 
   const upPos = cp ? cp.up_pos : 0;
   const dnPos = cp ? cp.down_pos : 0;
@@ -409,12 +417,13 @@ function renderCurrentPeriod() {
   }
 
   body.innerHTML = `
-    <div style="display:flex;gap:12px;font-size:9px;color:var(--dim);margin-bottom:6px">
-      <span><span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:7px solid var(--green);margin-right:3px;vertical-align:middle"></span>Our UP buy</span>
-      <span><span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--red);margin-right:3px;vertical-align:middle"></span>Our DN buy</span>
+    <div style="display:flex;gap:12px;font-size:9px;color:var(--dim);margin-bottom:6px;align-items:center">
+      <span class="tog ${showBtc?'on':''}" style="--c:var(--blue)" onclick="showBtc=!showBtc;this.classList.toggle('on');renderCurrentPeriod()"><span class="pip"></span>BTC</span>
+      <span class="tog ${showUp?'on':''}" style="--c:var(--green)" onclick="showUp=!showUp;this.classList.toggle('on');renderCurrentPeriod()"><span class="pip"></span>UP ask</span>
+      <span style="margin-left:6px"><span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:7px solid var(--green);margin-right:3px;vertical-align:middle"></span>Our UP</span>
+      <span><span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--red);margin-right:3px;vertical-align:middle"></span>Our DN</span>
       <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--cyan);opacity:.6;margin-right:3px;vertical-align:middle"></span>Onur UP</span>
       <span><span style="display:inline-block;width:7px;height:7px;border:1.5px solid var(--cyan);border-radius:50%;opacity:.6;margin-right:3px;vertical-align:middle"></span>Onur DN</span>
-      <span><span style="display:inline-block;width:12px;height:1.5px;background:var(--green);opacity:.3;margin-right:3px;vertical-align:middle"></span>UP ask</span>
     </div>
     <div class="chart-wrap">${chart}</div>
     ${posCmpHtml}
@@ -430,10 +439,10 @@ function renderCurrentPeriod() {
   `;
 }
 
-function buildChart(snaps, ourTrades, onurTrades, K) {
+function buildChart(snaps, ourTrades, onurTrades, K, btcOn, upOn) {
   if (snaps.length < 2) return '<div class="empty" style="padding:40px 0">Not enough data</div>';
 
-  const W = 700, H = 180, PAD = {t:12, b:22, l:55, r:30};
+  const W = 700, H = 180, PAD = {t:12, b:22, l:55, r: upOn ? 30 : 12};
   const pW = W - PAD.l - PAD.r;
   const pH = H - PAD.t - PAD.b;
 
@@ -445,6 +454,7 @@ function buildChart(snaps, ourTrades, onurTrades, K) {
 
   const toX = rem => PAD.l + (1 - rem / 300) * pW;
   const toY = p => PAD.t + (1 - (p - minP) / pRange) * pH;
+  const toYup = p => PAD.t + (1 - p) * pH; // UP ask: 0 at bottom, 1 at top
 
   // Grid
   let grid = '';
@@ -463,47 +473,59 @@ function buildChart(snaps, ourTrades, onurTrades, K) {
     yGrid += `<line x1="${PAD.l}" y1="${y}" x2="${W-PAD.r}" y2="${y}" stroke="var(--border)" stroke-width="0.3"/>`;
   }
 
-  // BTC line
+  // BTC line (conditional)
   let path = '';
-  snaps.forEach((s, i) => {
-    path += (i === 0 ? 'M' : 'L') + `${toX(s.remaining).toFixed(1)},${toY(s.btc_raw).toFixed(1)} `;
-  });
-  const lastSnap = snaps[snaps.length - 1];
-  const firstSnap = snaps[0];
-  const areaPath = path + `L${toX(lastSnap.remaining).toFixed(1)},${H-PAD.b} L${toX(firstSnap.remaining).toFixed(1)},${H-PAD.b} Z`;
+  let areaPath = '';
+  let btcLine = '';
+  let btcArea = '';
+  if (btcOn) {
+    snaps.forEach((s, i) => {
+      path += (i === 0 ? 'M' : 'L') + `${toX(s.remaining).toFixed(1)},${toY(s.btc_raw).toFixed(1)} `;
+    });
+    const lastSnap = snaps[snaps.length - 1];
+    const firstSnap = snaps[0];
+    areaPath = path + `L${toX(lastSnap.remaining).toFixed(1)},${H-PAD.b} L${toX(firstSnap.remaining).toFixed(1)},${H-PAD.b} Z`;
+    btcArea = `<path d="${areaPath}" fill="url(#areaFill)"/>`;
+    btcLine = `<path d="${path}" fill="none" stroke="var(--blue)" stroke-width="1.5" stroke-linejoin="round"/>`;
+  }
 
-  // K line
+  // K line (only with BTC)
   let kLine = '';
-  if (K) {
+  if (btcOn && K) {
     const kY = toY(K);
     kLine = `<line x1="${PAD.l}" y1="${kY}" x2="${W-PAD.r}" y2="${kY}" stroke="var(--yellow)" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>`;
     kLine += `<text x="${W-PAD.r+2}" y="${kY+3}" fill="var(--yellow)" font-size="8" opacity="0.6">K</text>`;
   }
 
-  // UP ask price line (secondary axis 0-1, right side)
+  // UP ask price line (conditional, secondary axis 0-1)
   const upSnaps = snaps.filter(s => s.up_ask != null && s.up_ask > 0);
   let upLine = '';
   let upAxis = '';
-  if (upSnaps.length >= 2) {
-    const toYup = p => PAD.t + (1 - p) * pH; // 0 at bottom, 1 at top
+  if (upOn && upSnaps.length >= 2) {
     let upPath = '';
     upSnaps.forEach((s, i) => {
       upPath += (i === 0 ? 'M' : 'L') + `${toX(s.remaining).toFixed(1)},${toYup(s.up_ask).toFixed(1)} `;
     });
-    upLine = `<path d="${upPath}" fill="none" stroke="var(--green)" stroke-width="1" opacity="0.25" stroke-linejoin="round"/>`;
-    // Right Y-axis labels
+    upLine = `<path d="${upPath}" fill="none" stroke="var(--green)" stroke-width="1" opacity="${btcOn ? 0.25 : 0.7}" stroke-linejoin="round"/>`;
     for (let v = 0; v <= 1; v += 0.25) {
       const y = toYup(v);
-      upAxis += `<text x="${W-PAD.r+4}" y="${y+3}" fill="var(--green)" font-size="7" opacity="0.3">${v.toFixed(2)}</text>`;
+      upAxis += `<text x="${W-PAD.r+4}" y="${y+3}" fill="var(--green)" font-size="7" opacity="0.4">${v.toFixed(2)}</text>`;
     }
   }
 
-  // Helper: find BTC price at a given remaining time
-  function btcAt(rem) {
-    const nearest = snaps.reduce((best, s) =>
+  // Helper: find snap nearest to a remaining time
+  function snapAt(rem) {
+    return snaps.reduce((best, s) =>
       Math.abs(s.remaining - rem) < Math.abs(best.remaining - rem) ? s : best
     , snaps[0]);
-    return nearest.btc_raw;
+  }
+
+  // Marker Y position: BTC axis if BTC on, UP axis if only UP on
+  function markerY(rem) {
+    const s = snapAt(rem);
+    if (btcOn) return toY(s.btc_raw);
+    if (upOn && s.up_ask != null) return toYup(s.up_ask);
+    return toY(s.btc_raw); // fallback
   }
 
   // Our markers (triangles) — placed at fill time (signal + latency)
@@ -511,7 +533,7 @@ function buildChart(snaps, ourTrades, onurTrades, K) {
   ourTrades.forEach(t => {
     const rem = t.fill_remaining != null ? t.fill_remaining : t.remaining;
     const x = toX(rem);
-    const y = toY(btcAt(rem));
+    const y = markerY(rem);
     const isUp = t.side === 'UP';
     const color = isUp ? '#4ade80' : '#f87171';
     const dy = isUp ? -10 : 10;
@@ -531,7 +553,7 @@ function buildChart(snaps, ourTrades, onurTrades, K) {
   let onurMarkers = '';
   onurTrades.forEach(t => {
     const x = toX(t.remaining);
-    const y = toY(btcAt(t.remaining));
+    const y = markerY(t.remaining);
     const isUp = t.side === 'UP';
     const dy = isUp ? -16 : 16;
     const markerTop = y + dy - (isUp ? 0 : 3);
@@ -546,14 +568,21 @@ function buildChart(snaps, ourTrades, onurTrades, K) {
     onurMarkers += `<g class="mk">${shape}<rect x="${x-14}" y="${labelY-8}" width="28" height="11" rx="2" fill="var(--surface)" stroke="#22d3ee" stroke-width="0.5" opacity="0.9" class="mk-bg"/><text x="${x}" y="${labelY}" text-anchor="middle" fill="#22d3ee" font-size="8" font-weight="600" class="mk-lbl">${price}</text><rect x="${x-5}" y="${y+dy-6}" width="10" height="12" fill="transparent" class="mk-hit"/></g>`;
   });
 
-  // Current price dot
+  // Current price dot(s)
   let curDot = '';
   if (snaps.length > 0) {
     const last = snaps[snaps.length - 1];
     const cx = toX(last.remaining);
-    const cy = toY(last.btc_raw);
-    curDot = `<circle cx="${cx}" cy="${cy}" r="3" fill="var(--blue)"/>`;
-    curDot += `<text x="${cx+6}" y="${cy+3}" fill="var(--blue)" font-size="9" font-weight="600">$${last.btc_raw.toLocaleString()}</text>`;
+    if (btcOn) {
+      const cy = toY(last.btc_raw);
+      curDot += `<circle cx="${cx}" cy="${cy}" r="3" fill="var(--blue)"/>`;
+      curDot += `<text x="${cx+6}" y="${cy+3}" fill="var(--blue)" font-size="9" font-weight="600">$${last.btc_raw.toLocaleString()}</text>`;
+    }
+    if (upOn && last.up_ask != null) {
+      const cy = toYup(last.up_ask);
+      curDot += `<circle cx="${cx}" cy="${cy}" r="2.5" fill="var(--green)" opacity="0.6"/>`;
+      curDot += `<text x="${cx+6}" y="${cy+3}" fill="var(--green)" font-size="8" opacity="0.6">${last.up_ask.toFixed(2)}</text>`;
+    }
   }
 
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
@@ -561,11 +590,11 @@ function buildChart(snaps, ourTrades, onurTrades, K) {
       <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.08"/>
       <stop offset="100%" stop-color="#60a5fa" stop-opacity="0"/>
     </linearGradient></defs>
-    ${grid}${yGrid}
-    <path d="${areaPath}" fill="url(#areaFill)"/>
+    ${grid}${btcOn ? yGrid : ''}
+    ${btcArea}
     ${kLine}
     ${upLine}${upAxis}
-    <path d="${path}" fill="none" stroke="var(--blue)" stroke-width="1.5" stroke-linejoin="round"/>
+    ${btcLine}
     ${onurMarkers}
     ${markers}
     ${curDot}
