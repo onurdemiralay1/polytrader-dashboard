@@ -381,13 +381,15 @@ function renderCurrentPeriod() {
   if (trades.length > 0) {
     const rows = trades.slice(-15).reverse().map(t => {
       const sideColor = t.side === 'UP' ? 'var(--green)' : 'var(--red)';
-      const time = new Date(t.ts).toISOString().substr(11, 8);
+      const fillTs = t.fill_ts || t.ts;
+      const time = new Date(fillTs).toISOString().substr(11, 8);
+      const fillRem = t.fill_remaining != null ? t.fill_remaining : t.remaining;
       return `<tr>
         <td>${time}</td>
         <td style="color:${sideColor};font-weight:600">${t.side}</td>
         <td>${t.ask.toFixed(2)}</td>
         <td>${t.tokens.toFixed(2)}</td>
-        <td style="color:var(--dim)">${t.remaining.toFixed(0)}s</td>
+        <td style="color:var(--dim)">${fillRem.toFixed(0)}s</td>
       </tr>`;
     }).join('');
     tradesHtml = `<div class="trades-mini">
@@ -475,11 +477,12 @@ function buildChart(snaps, ourTrades, onurTrades, K) {
     return nearest.btc_raw;
   }
 
-  // Our markers (triangles)
+  // Our markers (triangles) — placed at fill time (signal + latency)
   let markers = '';
   ourTrades.forEach(t => {
-    const x = toX(t.remaining);
-    const y = toY(btcAt(t.remaining));
+    const rem = t.fill_remaining != null ? t.fill_remaining : t.remaining;
+    const x = toX(rem);
+    const y = toY(btcAt(rem));
     const isUp = t.side === 'UP';
     const color = isUp ? '#4ade80' : '#f87171';
     const dy = isUp ? -10 : 10;
