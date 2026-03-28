@@ -496,7 +496,7 @@ function buildChart(snaps, ourTrades, onurTrades, K) {
     } else {
       shape = `<polygon points="${x},${y+dy} ${x-4},${y+dy-7} ${x+4},${y+dy-7}" fill="${color}" opacity="0.8"/>`;
     }
-    markers += `<g class="mk">${shape}<rect x="${x-14}" y="${labelY-8}" width="28" height="11" rx="2" fill="var(--surface)" stroke="${color}" stroke-width="0.5" opacity="0.9" class="mk-bg"/><text x="${x}" y="${labelY}" text-anchor="middle" fill="${color}" font-size="7" font-weight="600" class="mk-lbl">${price}</text><rect x="${x-6}" y="${y+dy-8}" width="12" height="16" fill="transparent" class="mk-hit"/></g>`;
+    markers += `<g class="mk">${shape}<rect x="${x-14}" y="${labelY-8}" width="28" height="11" rx="2" fill="var(--surface)" stroke="${color}" stroke-width="0.5" opacity="0.9" class="mk-bg"/><text x="${x}" y="${labelY}" text-anchor="middle" fill="${color}" font-size="8" font-weight="600" class="mk-lbl">${price}</text><rect x="${x-6}" y="${y+dy-8}" width="12" height="16" fill="transparent" class="mk-hit"/></g>`;
   });
 
   // Onur markers (circles — filled for UP, hollow for DOWN)
@@ -514,7 +514,7 @@ function buildChart(snaps, ourTrades, onurTrades, K) {
     } else {
       shape = `<circle cx="${x}" cy="${y+dy}" r="3" fill="none" stroke="#22d3ee" stroke-width="1.5" opacity="0.5"/>`;
     }
-    onurMarkers += `<g class="mk">${shape}<rect x="${x-14}" y="${labelY-8}" width="28" height="11" rx="2" fill="var(--surface)" stroke="#22d3ee" stroke-width="0.5" opacity="0.9" class="mk-bg"/><text x="${x}" y="${labelY}" text-anchor="middle" fill="#22d3ee" font-size="7" font-weight="600" class="mk-lbl">${price}</text><rect x="${x-5}" y="${y+dy-6}" width="10" height="12" fill="transparent" class="mk-hit"/></g>`;
+    onurMarkers += `<g class="mk">${shape}<rect x="${x-14}" y="${labelY-8}" width="28" height="11" rx="2" fill="var(--surface)" stroke="#22d3ee" stroke-width="0.5" opacity="0.9" class="mk-bg"/><text x="${x}" y="${labelY}" text-anchor="middle" fill="#22d3ee" font-size="8" font-weight="600" class="mk-lbl">${price}</text><rect x="${x-5}" y="${y+dy-6}" width="10" height="12" fill="transparent" class="mk-hit"/></g>`;
   });
 
   // Current price dot
@@ -604,8 +604,8 @@ function renderCumChart() {
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.innerHTML = `
     <line x1="${PAD.l}" y1="${zeroY}" x2="${W-PAD.r}" y2="${zeroY}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="2,2"/>
-    <text x="${PAD.l-4}" y="${toY(maxV)+3}" fill="var(--dim)" font-size="7" text-anchor="end">+$${maxV.toFixed(0)}</text>
-    <text x="${PAD.l-4}" y="${toY(minV)+3}" fill="var(--dim)" font-size="7" text-anchor="end">${minV < 0 ? '-$' + Math.abs(minV).toFixed(0) : '$0'}</text>
+    <text x="${PAD.l-4}" y="${toY(maxV)+3}" fill="var(--dim)" font-size="8" text-anchor="end">+$${maxV.toFixed(0)}</text>
+    <text x="${PAD.l-4}" y="${toY(minV)+3}" fill="var(--dim)" font-size="8" text-anchor="end">${minV < 0 ? '-$' + Math.abs(minV).toFixed(0) : '$0'}</text>
     ${onurSvg}
     <path d="${ourPath}" fill="none" stroke="${ourColor}" stroke-width="1.5" stroke-linejoin="round"/>
     <circle cx="${toX(data.length-1)}" cy="${toY(lastVal)}" r="2.5" fill="${ourColor}"/>
