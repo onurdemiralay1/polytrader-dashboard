@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taker 5min Paper</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#08080c;--surface:#111118;--border:#1a1a25;--border2:#252535;
+  --text:#d4d4dc;--dim:#555568;--green:#4ade80;--red:#f87171;
+  --blue:#60a5fa;--orange:#fb923c;--pink:#f472b6;--yellow:#facc15;
+  --cyan:#22d3ee;
+}
+body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',monospace;font-size:12px;padding:16px 20px}
+
+.hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:14px}
+.hdr h1{font-size:15px;font-weight:600;letter-spacing:-0.3px}
+.hdr .badge{font-size:9px;padding:2px 6px;border-radius:3px;margin-left:8px;background:rgba(251,146,60,.15);color:var(--orange)}
+.hdr .st{color:var(--dim);font-size:11px;display:flex;align-items:center;gap:8px}
+.hdr .dot{width:6px;height:6px;border-radius:50%;background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.dot.on{background:var(--green);animation:pulse 2s infinite}
+.rbtn{background:none;border:1px solid var(--border);color:var(--dim);padding:3px 10px;border-radius:3px;cursor:pointer;font:inherit;font-size:10px}
+.rbtn:hover{color:var(--text);border-color:var(--border2)}
+
+/* Head-to-head comparison strip */
+.h2h-strip{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.h2h-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 14px;position:relative;overflow:hidden}
+.h2h-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--c)}
+.h2h-card .name{font-size:11px;font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.h2h-card .name .tag{font-size:9px;padding:1px 5px;border-radius:3px;font-weight:400}
+.h2h-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.h2h-item .k{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.3px}
+.h2h-item .v{font-size:16px;font-weight:700;margin-top:1px}
+.h2h-item .s{font-size:9px;color:var(--dim);margin-top:1px}
+.pos{color:var(--green)}.neg{color:var(--red)}
+
+.cur-section{background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:14px;overflow:hidden}
+.cur-hdr{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.cur-hdr .title{font-weight:600;font-size:12px;display:flex;align-items:center;gap:8px}
+.cur-hdr .title .live{font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(74,222,128,.15);color:var(--green);animation:pulse 2s infinite}
+.cur-hdr .timer{color:var(--dim);font-size:11px;font-variant-numeric:tabular-nums}
+.cur-body{padding:12px 14px}
+
+.chart-wrap{height:180px;margin-bottom:12px;position:relative}
+.chart-wrap svg{width:100%;height:100%}
+
+.pos-section{display:flex;gap:16px;margin-bottom:10px}
+.pos-col{flex:1}
+.pos-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.pos-label{font-size:10px;font-weight:600;width:24px}
+.pos-label.up{color:var(--green)}
+.pos-label.dn{color:var(--red)}
+.pos-track{flex:1;height:14px;background:var(--border);border-radius:3px;overflow:hidden}
+.pos-fill{height:100%;border-radius:3px;transition:width 0.5s ease}
+.pos-fill.up{background:linear-gradient(90deg,rgba(74,222,128,.3),rgba(74,222,128,.6))}
+.pos-fill.dn{background:linear-gradient(90deg,rgba(248,113,113,.3),rgba(248,113,113,.6))}
+.pos-val{font-size:10px;color:var(--dim);width:80px;text-align:right;font-variant-numeric:tabular-nums}
+
+.model-row{display:flex;gap:16px;font-size:10px;color:var(--dim);flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--border)}
+.model-row span b{color:var(--text);font-weight:500}
+
+.trades-mini{max-height:120px;overflow-y:auto;margin-bottom:10px;border:1px solid var(--border);border-radius:4px}
+.trades-mini::-webkit-scrollbar{width:3px}
+.trades-mini::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.trades-mini table{width:100%;border-collapse:collapse}
+.trades-mini th{font-size:8px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);padding:3px 6px;text-align:left;position:sticky;top:0;background:var(--surface)}
+.trades-mini td{font-size:10px;padding:2px 6px;border-top:1px solid rgba(255,255,255,.02)}
+
+.comp-cur{font-size:10px;color:var(--dim);padding:8px 0;border-top:1px solid var(--border);margin-top:6px;display:flex;gap:16px;flex-wrap:wrap}
+.comp-cur b{color:var(--text);font-weight:500}
+
+/* Side-by-side positions comparison */
+.pos-cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.pos-cmp-col{border:1px solid var(--border);border-radius:5px;padding:10px 12px;position:relative}
+.pos-cmp-col::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:5px 5px 0 0;background:var(--c)}
+.pos-cmp-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.pos-cmp-hdr .name{font-size:11px;font-weight:600}
+.pos-cmp-hdr .buys{font-size:9px;color:var(--dim)}
+.pos-cmp-tbl{width:100%;font-size:10px}
+.pos-cmp-tbl th{text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--dim);padding:2px 4px;font-weight:400}
+.pos-cmp-tbl td{padding:3px 4px;font-variant-numeric:tabular-nums}
+.pos-cmp-tbl .side-up{color:var(--green);font-weight:600}
+.pos-cmp-tbl .side-dn{color:var(--red);font-weight:600}
+.pos-cmp-tbl .tot-row td{border-top:1px solid var(--border);padding-top:5px;font-weight:600}
+.pos-cmp-tbl .val{color:var(--text)}
+.pos-cmp-tbl .dim{color:var(--dim)}
+
+.ptable-wrap{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:14px}
+.ptable-hdr{padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;font-size:12px;display:flex;justify-content:space-between;align-items:center}
+.ptable-hdr .dim{font-weight:400;font-size:10px;color:var(--dim)}
+.ptable{width:100%;border-collapse:collapse}
+.ptable th{text-align:left;padding:6px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1}
+.ptable td{padding:5px 10px;border-bottom:1px solid rgba(255,255,255,.02);font-size:11px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ptable tr:hover{background:rgba(255,255,255,.015)}
+.ptable tr.winner{background:rgba(74,222,128,.04)}
+.ptable tr.loser{background:rgba(248,113,113,.03)}
+.ptable tr.pending{opacity:.6}
+.ptable-scroll{max-height:520px;overflow-y:auto}
+.ptable-scroll::-webkit-scrollbar{width:4px}
+.ptable-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+.cum-chart{height:70px;margin-bottom:14px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 14px}
+.cum-chart svg{width:100%;height:100%}
+
+.empty{text-align:center;padding:40px;color:var(--dim);font-size:13px}
+.legend{display:flex;gap:12px;font-size:9px;color:var(--dim);margin-bottom:4px}
+
+.api-input{display:flex;gap:6px;align-items:center}
+.api-input input{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:3px 8px;border-radius:3px;font:inherit;font-size:10px;width:200px}
+.api-input input:focus{outline:none;border-color:var(--border2)}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div style="display:flex;align-items:center">
+    <h1>Taker 5min</h1>
+    <span class="badge">PAPER</span>
+  </div>
+  <div class="api-input" id="api-cfg" style="display:none">
+    <span style="color:var(--dim);font-size:10px">API:</span>
+    <input id="api-url" placeholder="http://localhost:8765" />
+    <button class="rbtn" onclick="saveApi()">Set</button>
+  </div>
+  <div class="st">
+    <span class="dot" id="dot"></span>
+    <span id="st-txt">Connecting...</span>
+    <button class="rbtn" onclick="document.getElementById('api-cfg').style.display=document.getElementById('api-cfg').style.display==='none'?'flex':'none'">API</button>
+    <button class="rbtn" onclick="fetchState()">Refresh</button>
+  </div>
+</div>
+
+<!-- Head-to-head comparison -->
+<div class="h2h-strip" id="h2h-strip"></div>
+
+<!-- Current period -->
+<div class="cur-section">
+  <div class="cur-hdr">
+    <div class="title">Current Period <span class="live" id="live-badge">LIVE</span></div>
+    <div class="timer" id="timer">--:-- remaining</div>
+  </div>
+  <div class="cur-body" id="cur-body">
+    <div class="empty">Waiting for data...</div>
+  </div>
+</div>
+
+<!-- Cumulative PnL -->
+<div class="cum-chart" id="cum-chart-wrap" style="display:none">
+  <div class="legend" id="cum-legend"></div>
+  <svg id="cum-svg"></svg>
+</div>
+
+<!-- Period history -->
+<div class="ptable-wrap">
+  <div class="ptable-hdr">
+    <span>Period History (head-to-head)</span>
+    <span class="dim" id="hist-sub"></span>
+  </div>
+  <div class="ptable-scroll">
+    <table class="ptable">
+      <thead><tr>
+        <th>Time</th><th>Res</th>
+        <th>Buys</th><th>Up$</th><th>Dn$</th><th style="text-align:right">PnL</th><th style="text-align:right">Cum</th>
+        <th style="text-align:right;color:var(--cyan)">Onur #</th><th style="text-align:right;color:var(--cyan)">Onur PnL</th><th style="text-align:right;color:var(--cyan)">Onur Cum</th>
+      </tr></thead>
+      <tbody id="hist-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const MAX_POS = 100;
+let state = null;
+let compData = null; // will hold single Onur wallet object
+let apiUrl = localStorage.getItem('taker5m_api') || 'http://54.194.33.93:8765';
+document.getElementById('api-url').value = apiUrl;
+
+function saveApi() {
+  apiUrl = document.getElementById('api-url').value.replace(/\/+$/, '');
+  localStorage.setItem('taker5m_api', apiUrl);
+  fetchState();
+}
+
+async function fetchState() {
+  try {
+    const r = await fetch(apiUrl + '/');
+    state = await r.json();
+    document.getElementById('dot').className = 'dot on';
+    document.getElementById('st-txt').textContent = 'Connected';
+    render();
+  } catch(e) {
+    document.getElementById('dot').className = 'dot';
+    document.getElementById('st-txt').textContent = 'Disconnected';
+  }
+}
+
+async function fetchCompetitors() {
+  try {
+    const r = await fetch(apiUrl + '/competitors');
+    const arr = await r.json();
+    compData = arr.find(w => w.name === 'Onur' && !w.error) || null;
+    render();
+  } catch(e) { /* silent */ }
+}
+
+function $(id) { return document.getElementById(id); }
+function fmt(n, d=2) { return n != null ? n.toFixed(d) : '?'; }
+function fmtPnl(n) {
+  if (n == null) return '-';
+  return (n >= 0 ? '+' : '') + '$' + n.toFixed(2);
+}
+function pnlClass(n) { return n != null && n >= 0 ? 'pos' : 'neg'; }
+
+// Get set of periods where Onur traded (for head-to-head)
+function getOnurPeriods() {
+  if (!compData || !compData.periods) return new Set();
+  return new Set(Object.keys(compData.periods));
+}
+
+function render() {
+  if (!state) return;
+  renderH2H();
+  renderCurrentPeriod();
+  renderCumChart();
+  renderHistory();
+}
+
+function renderH2H() {
+  const strip = $('h2h-strip');
+  const onurPids = getOnurPeriods();
+
+  // Compute our head-to-head stats (only periods where Onur also traded)
+  const hist = state.history || [];
+  let ourH2H = {pnl:0, wins:0, resolved:0, buys:0, cost:0};
+  hist.forEach(h => {
+    if (!h.resolution || !onurPids.has(String(h.period_ts))) return;
+    ourH2H.pnl += h.pnl;
+    ourH2H.resolved++;
+    ourH2H.buys += h.buys;
+    ourH2H.cost += h.cost;
+    if (h.pnl > 0) ourH2H.wins++;
+  });
+
+  // Onur head-to-head (already computed server side, but only for resolved periods in our data)
+  const onur = compData || {};
+  const onurRes = onur.resolved || 0;
+  const h2hCount = ourH2H.resolved;
+
+  const ourCard = `<div class="h2h-card" style="--c:var(--blue)">
+    <div class="name"><span>Ours (Paper)</span><span class="tag" style="background:rgba(96,165,250,.15);color:var(--blue)">${h2hCount > 0 ? h2hCount + ' h2h periods' : state.periods_resolved + ' periods'}</span></div>
+    <div class="h2h-grid">
+      <div class="h2h-item"><div class="k">PnL</div><div class="v ${pnlClass(h2hCount > 0 ? ourH2H.pnl : state.total_pnl)}">${fmtPnl(h2hCount > 0 ? ourH2H.pnl : state.total_pnl)}</div></div>
+      <div class="h2h-item"><div class="k">Win Rate</div><div class="v">${h2hCount > 0 ? (100*ourH2H.wins/h2hCount).toFixed(1) : state.win_rate}%</div></div>
+      <div class="h2h-item"><div class="k">$/period</div><div class="v ${pnlClass(h2hCount > 0 ? ourH2H.pnl : state.total_pnl)}">${h2hCount > 0 ? fmtPnl(ourH2H.pnl/h2hCount) : (state.periods_resolved ? fmtPnl(state.total_pnl/state.periods_resolved) : '-')}</div></div>
+      <div class="h2h-item"><div class="k">Deployed</div><div class="v">$${h2hCount > 0 ? Math.round(ourH2H.cost) : state.total_buys*10}</div><div class="s">Balance: $${fmt(state.balance)}</div></div>
+    </div>
+  </div>`;
+
+  let onurCard = '';
+  if (onur.name) {
+    const pnlPer = onurRes > 0 ? onur.total_pnl / onurRes : 0;
+    onurCard = `<div class="h2h-card" style="--c:var(--cyan)">
+      <div class="name"><span>${onur.name} <span style="color:var(--dim);font-weight:400">${onur.addr}</span></span><span class="tag" style="background:rgba(34,211,238,.12);color:var(--cyan)">${onurRes} h2h periods</span></div>
+      <div class="h2h-grid">
+        <div class="h2h-item"><div class="k">PnL</div><div class="v ${pnlClass(onur.total_pnl)}">${fmtPnl(onur.total_pnl)}</div></div>
+        <div class="h2h-item"><div class="k">Win Rate</div><div class="v">${onur.win_rate}%</div></div>
+        <div class="h2h-item"><div class="k">$/period</div><div class="v ${pnlClass(pnlPer)}">${fmtPnl(pnlPer)}</div></div>
+        <div class="h2h-item"><div class="k">Deployed</div><div class="v">$${onur.total_cost?.toLocaleString() || '?'}</div><div class="s">${onur.n_trades} trades, ~60sh each</div></div>
+      </div>
+    </div>`;
+  } else {
+    onurCard = `<div class="h2h-card" style="--c:var(--cyan)"><div class="name">Onur</div><div class="empty" style="padding:10px">Loading competitor data...</div></div>`;
+  }
+
+  strip.innerHTML = ourCard + onurCard;
+}
+
+function renderCurrentPeriod() {
+  const body = $('cur-body');
+  const cp = state.current_period;
+  const snaps = state.snapshots || [];
+  const K = state.price_to_hit;
+
+  if (!state.period_ts || snaps.length === 0) {
+    body.innerHTML = '<div class="empty">Waiting for data...</div>';
+    return;
+  }
+
+  const rem = state.remaining;
+  const mins = Math.floor(rem / 60);
+  const secs = Math.floor(rem % 60);
+  $('timer').textContent = `${mins}:${String(secs).padStart(2,'0')} remaining | K = $${K ? K.toLocaleString() : '?'}`;
+
+  const trades = cp ? cp.trades || [] : [];
+
+  // Get Onur's trades for current period
+  let onurTrades = [];
+  if (compData && compData.periods) {
+    const op = compData.periods[String(state.period_ts)];
+    if (op && op.trades) onurTrades = op.trades;
+  }
+
+  const chart = buildChart(snaps, trades, onurTrades, K);
+
+  const upPos = cp ? cp.up_pos : 0;
+  const dnPos = cp ? cp.down_pos : 0;
+  const upPct = Math.min(100, upPos / MAX_POS * 100);
+  const dnPct = Math.min(100, dnPos / MAX_POS * 100);
+  const buys = cp ? cp.buys : 0;
+  const cost = cp ? cp.cost : 0;
+
+  const pUp = state.p_up;
+  let expPnl = null;
+  if (cp && pUp != null && cost > 0) {
+    const expRev = (cp.up_tokens || 0) * pUp + (cp.down_tokens || 0) * (1 - pUp);
+    expPnl = expRev - cost;
+  }
+
+  // Side-by-side position comparison
+  function posCol(label, color, trades, tokenField, upAsk, dnAsk) {
+    const upT = trades.filter(t => t.side === 'UP');
+    const dnT = trades.filter(t => t.side === 'DOWN');
+    const upCost = upT.reduce((s,t) => s + (t.cost||0), 0);
+    const dnCost = dnT.reduce((s,t) => s + (t.cost||0), 0);
+    const upTokens = upT.reduce((s,t) => s + (t[tokenField]||0), 0);
+    const dnTokens = dnT.reduce((s,t) => s + (t[tokenField]||0), 0);
+    const upAvg = upT.length > 0 ? upCost / upTokens : 0;
+    const dnAvg = dnT.length > 0 ? dnCost / dnTokens : 0;
+    const upVal = upAsk != null ? upTokens * upAsk : null;
+    const dnVal = dnAsk != null ? dnTokens * dnAsk : null;
+    const totalCost = upCost + dnCost;
+    const totalVal = (upVal != null && dnVal != null) ? upVal + dnVal : null;
+    const pnlEst = totalVal != null ? totalVal - totalCost : null;
+    return `<div class="pos-cmp-col" style="--c:${color}">
+      <div class="pos-cmp-hdr">
+        <span class="name">${label}</span>
+        <span class="buys">${trades.length} buys | $${totalCost.toFixed(0)} deployed</span>
+      </div>
+      <table class="pos-cmp-tbl">
+        <tr><th></th><th>#</th><th>Cost</th><th>Avg</th><th>Tokens</th><th>Value</th></tr>
+        <tr>
+          <td class="side-up">UP</td>
+          <td class="val">${upT.length}</td>
+          <td class="val">$${upCost.toFixed(0)}</td>
+          <td class="dim">${upT.length ? upAvg.toFixed(3) : '-'}</td>
+          <td class="val">${upTokens.toFixed(1)}</td>
+          <td class="${upVal != null && upVal >= upCost ? 'pos' : 'neg'}">${upVal != null ? '$'+upVal.toFixed(1) : '-'}</td>
+        </tr>
+        <tr>
+          <td class="side-dn">DN</td>
+          <td class="val">${dnT.length}</td>
+          <td class="val">$${dnCost.toFixed(0)}</td>
+          <td class="dim">${dnT.length ? dnAvg.toFixed(3) : '-'}</td>
+          <td class="val">${dnTokens.toFixed(1)}</td>
+          <td class="${dnVal != null && dnVal >= dnCost ? 'pos' : 'neg'}">${dnVal != null ? '$'+dnVal.toFixed(1) : '-'}</td>
+        </tr>
+        <tr class="tot-row">
+          <td></td>
+          <td class="val">${trades.length}</td>
+          <td class="val">$${totalCost.toFixed(0)}</td>
+          <td></td>
+          <td></td>
+          <td class="${pnlEst != null ? (pnlEst >= 0 ? 'pos' : 'neg') : ''}">${pnlEst != null ? (pnlEst >= 0 ? '+' : '') + '$'+pnlEst.toFixed(1) : '-'}</td>
+        </tr>
+      </table>
+    </div>`;
+  }
+
+  const upAskNow = state.up_best_ask;
+  const dnAskNow = state.down_best_ask;
+  const posCmpHtml = `<div class="pos-cmp">
+    ${posCol('Ours (Paper)', 'var(--blue)', trades, 'tokens', upAskNow, dnAskNow)}
+    ${posCol('Onur', 'var(--cyan)', onurTrades, 'shares', upAskNow, dnAskNow)}
+  </div>`;
+
+  let tradesHtml = '';
+  if (trades.length > 0) {
+    const rows = trades.slice(-15).reverse().map(t => {
+      const sideColor = t.side === 'UP' ? 'var(--green)' : 'var(--red)';
+      const time = new Date(t.ts).toISOString().substr(11, 8);
+      return `<tr>
+        <td>${time}</td>
+        <td style="color:${sideColor};font-weight:600">${t.side}</td>
+        <td>${t.ask.toFixed(2)}</td>
+        <td>${t.tokens.toFixed(2)}</td>
+        <td style="color:var(--dim)">${t.remaining.toFixed(0)}s</td>
+      </tr>`;
+    }).join('');
+    tradesHtml = `<div class="trades-mini">
+      <table><thead><tr><th>Time</th><th>Side</th><th>Ask</th><th>Tokens</th><th>Rem</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    </div>`;
+  }
+
+  body.innerHTML = `
+    <div style="display:flex;gap:12px;font-size:9px;color:var(--dim);margin-bottom:6px">
+      <span><span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:7px solid var(--green);margin-right:3px;vertical-align:middle"></span>Our UP buy</span>
+      <span><span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--red);margin-right:3px;vertical-align:middle"></span>Our DN buy</span>
+      <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--cyan);opacity:.6;margin-right:3px;vertical-align:middle"></span>Onur UP</span>
+      <span><span style="display:inline-block;width:7px;height:7px;border:1.5px solid var(--cyan);border-radius:50%;opacity:.6;margin-right:3px;vertical-align:middle"></span>Onur DN</span>
+    </div>
+    <div class="chart-wrap">${chart}</div>
+    ${posCmpHtml}
+    ${tradesHtml}
+    <div class="model-row">
+      <span>p_up: <b>${fmt(state.p_up, 4)}</b></span>
+      <span>sigma: <b>${fmt(state.sigma, 1)}</b></span>
+      <span>prem: <b>$${fmt(state.premium, 1)}</b></span>
+      <span>BTC: <b>$${state.btc_raw ? state.btc_raw.toLocaleString() : '?'}</b></span>
+      <span>up_ask: <b>${fmt(state.up_best_ask)}</b></span>
+      <span>dn_ask: <b>${fmt(state.down_best_ask)}</b></span>
+    </div>
+  `;
+}
+
+function buildChart(snaps, ourTrades, onurTrades, K) {
+  if (snaps.length < 2) return '<div class="empty" style="padding:40px 0">Not enough data</div>';
+
+  const W = 700, H = 180, PAD = {t:12, b:22, l:55, r:12};
+  const pW = W - PAD.l - PAD.r;
+  const pH = H - PAD.t - PAD.b;
+
+  const prices = snaps.map(s => s.btc_raw);
+  if (K) prices.push(K);
+  const minP = Math.min(...prices) - 3;
+  const maxP = Math.max(...prices) + 3;
+  const pRange = maxP - minP || 1;
+
+  const toX = rem => PAD.l + (1 - rem / 300) * pW;
+  const toY = p => PAD.t + (1 - (p - minP) / pRange) * pH;
+
+  // Grid
+  let grid = '';
+  for (let t = 0; t <= 300; t += 60) {
+    const x = toX(300 - t);
+    grid += `<line x1="${x}" y1="${PAD.t}" x2="${x}" y2="${H-PAD.b}" stroke="var(--border)" stroke-width="0.5"/>`;
+    grid += `<text x="${x}" y="${H-6}" fill="var(--dim)" font-size="8" text-anchor="middle">${t}s</text>`;
+  }
+
+  const ySteps = 4;
+  let yGrid = '';
+  for (let i = 0; i <= ySteps; i++) {
+    const p = minP + (pRange * i / ySteps);
+    const y = toY(p);
+    yGrid += `<text x="${PAD.l-4}" y="${y+3}" fill="var(--dim)" font-size="8" text-anchor="end">${p.toFixed(0)}</text>`;
+    yGrid += `<line x1="${PAD.l}" y1="${y}" x2="${W-PAD.r}" y2="${y}" stroke="var(--border)" stroke-width="0.3"/>`;
+  }
+
+  // BTC line
+  let path = '';
+  snaps.forEach((s, i) => {
+    path += (i === 0 ? 'M' : 'L') + `${toX(s.remaining).toFixed(1)},${toY(s.btc_raw).toFixed(1)} `;
+  });
+  const lastSnap = snaps[snaps.length - 1];
+  const firstSnap = snaps[0];
+  const areaPath = path + `L${toX(lastSnap.remaining).toFixed(1)},${H-PAD.b} L${toX(firstSnap.remaining).toFixed(1)},${H-PAD.b} Z`;
+
+  // K line
+  let kLine = '';
+  if (K) {
+    const kY = toY(K);
+    kLine = `<line x1="${PAD.l}" y1="${kY}" x2="${W-PAD.r}" y2="${kY}" stroke="var(--yellow)" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>`;
+    kLine += `<text x="${W-PAD.r+2}" y="${kY+3}" fill="var(--yellow)" font-size="8" opacity="0.6">K</text>`;
+  }
+
+  // Helper: find BTC price at a given remaining time
+  function btcAt(rem) {
+    const nearest = snaps.reduce((best, s) =>
+      Math.abs(s.remaining - rem) < Math.abs(best.remaining - rem) ? s : best
+    , snaps[0]);
+    return nearest.btc_raw;
+  }
+
+  // Our markers (triangles)
+  let markers = '';
+  ourTrades.forEach(t => {
+    const x = toX(t.remaining);
+    const y = toY(btcAt(t.remaining));
+    const isUp = t.side === 'UP';
+    const color = isUp ? '#4ade80' : '#f87171';
+    const dy = isUp ? -10 : 10;
+    if (isUp) {
+      markers += `<polygon points="${x},${y+dy} ${x-4},${y+dy+7} ${x+4},${y+dy+7}" fill="${color}" opacity="0.8"/>`;
+    } else {
+      markers += `<polygon points="${x},${y+dy} ${x-4},${y+dy-7} ${x+4},${y+dy-7}" fill="${color}" opacity="0.8"/>`;
+    }
+  });
+
+  // Onur markers (circles — filled for UP, hollow for DOWN)
+  let onurMarkers = '';
+  onurTrades.forEach(t => {
+    const x = toX(t.remaining);
+    const y = toY(btcAt(t.remaining));
+    const isUp = t.side === 'UP';
+    const dy = isUp ? -16 : 16; // offset further than ours to avoid overlap
+    if (isUp) {
+      onurMarkers += `<circle cx="${x}" cy="${y+dy}" r="3" fill="#22d3ee" opacity="0.5"/>`;
+    } else {
+      onurMarkers += `<circle cx="${x}" cy="${y+dy}" r="3" fill="none" stroke="#22d3ee" stroke-width="1.5" opacity="0.5"/>`;
+    }
+  });
+
+  // Current price dot
+  let curDot = '';
+  if (snaps.length > 0) {
+    const last = snaps[snaps.length - 1];
+    const cx = toX(last.remaining);
+    const cy = toY(last.btc_raw);
+    curDot = `<circle cx="${cx}" cy="${cy}" r="3" fill="var(--blue)"/>`;
+    curDot += `<text x="${cx+6}" y="${cy+3}" fill="var(--blue)" font-size="9" font-weight="600">$${last.btc_raw.toLocaleString()}</text>`;
+  }
+
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+    <defs><linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#60a5fa" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${grid}${yGrid}
+    <path d="${areaPath}" fill="url(#areaFill)"/>
+    ${kLine}
+    <path d="${path}" fill="none" stroke="var(--blue)" stroke-width="1.5" stroke-linejoin="round"/>
+    ${onurMarkers}
+    ${markers}
+    ${curDot}
+  </svg>`;
+}
+
+function renderCumChart() {
+  const wrap = $('cum-chart-wrap');
+  const hist = state.history;
+  const resolved = hist.filter(h => h.resolution);
+  if (resolved.length < 2) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+
+  const data = resolved.slice().reverse();
+  const W = 700, H = 50, PAD = {l:40, r:8, t:4, b:4};
+  const pW = W - PAD.l - PAD.r;
+  const pH = H - PAD.t - PAD.b;
+
+  const ourVals = data.map(d => d.cum_pnl);
+  let allVals = [...ourVals];
+
+  // Build Onur line
+  let onurPoints = [];
+  if (compData && compData.periods) {
+    data.forEach((d, i) => {
+      const cp = compData.periods[String(d.period_ts)];
+      if (cp && cp.cum_pnl != null) {
+        onurPoints.push({i, cum: cp.cum_pnl});
+        allVals.push(cp.cum_pnl);
+      }
+    });
+  }
+
+  const minV = Math.min(0, ...allVals);
+  const maxV = Math.max(0, ...allVals);
+  const vRange = maxV - minV || 1;
+  const toX = i => PAD.l + (i / (data.length - 1)) * pW;
+  const toY = v => PAD.t + (1 - (v - minV) / vRange) * pH;
+
+  let ourPath = '';
+  data.forEach((d, i) => {
+    ourPath += (i === 0 ? 'M' : 'L') + `${toX(i).toFixed(1)},${toY(d.cum_pnl).toFixed(1)} `;
+  });
+
+  const zeroY = toY(0);
+  const lastVal = ourVals[ourVals.length - 1];
+  const ourColor = '#60a5fa';
+
+  let onurSvg = '';
+  if (onurPoints.length > 1) {
+    let oPath = '';
+    onurPoints.forEach((p, j) => {
+      oPath += (j === 0 ? 'M' : 'L') + `${toX(p.i).toFixed(1)},${toY(p.cum).toFixed(1)} `;
+    });
+    const lastO = onurPoints[onurPoints.length - 1];
+    onurSvg = `<path d="${oPath}" fill="none" stroke="#22d3ee" stroke-width="1.2" stroke-linejoin="round" opacity="0.7"/>`;
+    onurSvg += `<circle cx="${toX(lastO.i)}" cy="${toY(lastO.cum)}" r="2" fill="#22d3ee" opacity="0.7"/>`;
+  }
+
+  $('cum-legend').innerHTML = `
+    <span><span style="display:inline-block;width:10px;height:3px;border-radius:1px;margin-right:4px;vertical-align:middle;background:#60a5fa"></span>Ours</span>
+    <span><span style="display:inline-block;width:10px;height:3px;border-radius:1px;margin-right:4px;vertical-align:middle;background:#22d3ee"></span>Onur</span>
+  `;
+
+  const svg = $('cum-svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = `
+    <line x1="${PAD.l}" y1="${zeroY}" x2="${W-PAD.r}" y2="${zeroY}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="2,2"/>
+    <text x="${PAD.l-4}" y="${toY(maxV)+3}" fill="var(--dim)" font-size="7" text-anchor="end">+$${maxV.toFixed(0)}</text>
+    <text x="${PAD.l-4}" y="${toY(minV)+3}" fill="var(--dim)" font-size="7" text-anchor="end">${minV < 0 ? '-$' + Math.abs(minV).toFixed(0) : '$0'}</text>
+    ${onurSvg}
+    <path d="${ourPath}" fill="none" stroke="${ourColor}" stroke-width="1.5" stroke-linejoin="round"/>
+    <circle cx="${toX(data.length-1)}" cy="${toY(lastVal)}" r="2.5" fill="${ourColor}"/>
+  `;
+}
+
+function renderHistory() {
+  const hist = state.history || [];
+  const onurPids = getOnurPeriods();
+  const resolved = hist.filter(h => h.resolution);
+  $('hist-sub').textContent = `${resolved.length} resolved | Onur overlap: ${[...onurPids].filter(p => resolved.some(h => String(h.period_ts) === p)).length}`;
+
+  const rows = hist.map(h => {
+    const isPending = !h.resolution;
+    const isWin = h.pnl != null && h.pnl > 0;
+    const cls = isPending ? 'pending' : (isWin ? 'winner' : 'loser');
+    const resColor = h.resolution === 'Up' ? 'var(--green)' : (h.resolution === 'Down' ? 'var(--red)' : 'var(--dim)');
+
+    const op = compData && compData.periods ? compData.periods[String(h.period_ts)] : null;
+    const oPnl = op ? op.pnl : null;
+    const oCum = op ? op.cum_pnl : null;
+    const oN = op ? op.n : null;
+
+    return `<tr class="${cls}">
+      <td>${h.time}</td>
+      <td style="color:${resColor};font-weight:600">${h.resolution || 'LIVE'}</td>
+      <td>${h.buys}</td>
+      <td>$${h.up_pos}</td>
+      <td>$${h.down_pos}</td>
+      <td style="text-align:right" class="${h.pnl != null ? pnlClass(h.pnl) : ''}">${h.pnl != null ? fmtPnl(h.pnl) : '-'}</td>
+      <td style="text-align:right" class="${pnlClass(h.cum_pnl)}">${fmtPnl(h.cum_pnl)}</td>
+      <td style="text-align:right;color:var(--cyan)">${oN != null ? oN : '<span style="color:var(--border2)">-</span>'}</td>
+      <td style="text-align:right" class="${oPnl != null ? pnlClass(oPnl) : ''}" style="color:var(--cyan)">${oPnl != null ? `<span style="color:${oPnl>=0?'var(--green)':'var(--red)'}">${fmtPnl(oPnl)}</span>` : '<span style="color:var(--border2)">-</span>'}</td>
+      <td style="text-align:right">${oCum != null ? `<span style="color:${oCum>=0?'var(--green)':'var(--red)'}">${fmtPnl(oCum)}</span>` : '<span style="color:var(--border2)">-</span>'}</td>
+    </tr>`;
+  }).join('');
+
+  $('hist-body').innerHTML = rows;
+}
+
+// ── Start ──
+setInterval(fetchState, 3000);
+setInterval(fetchCompetitors, 15000);
+fetchState();
+fetchCompetitors();
+
+const params = new URLSearchParams(location.search);
+if (params.get('api')) {
+  apiUrl = params.get('api');
+  document.getElementById('api-url').value = apiUrl;
+  localStorage.setItem('taker5m_api', apiUrl);
+}
+</script>
+</body>
+</html>
