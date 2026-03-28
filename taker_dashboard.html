@@ -414,6 +414,7 @@ function renderCurrentPeriod() {
       <span><span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--red);margin-right:3px;vertical-align:middle"></span>Our DN buy</span>
       <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--cyan);opacity:.6;margin-right:3px;vertical-align:middle"></span>Onur UP</span>
       <span><span style="display:inline-block;width:7px;height:7px;border:1.5px solid var(--cyan);border-radius:50%;opacity:.6;margin-right:3px;vertical-align:middle"></span>Onur DN</span>
+      <span><span style="display:inline-block;width:12px;height:1.5px;background:var(--green);opacity:.3;margin-right:3px;vertical-align:middle"></span>UP ask</span>
     </div>
     <div class="chart-wrap">${chart}</div>
     ${posCmpHtml}
@@ -432,7 +433,7 @@ function renderCurrentPeriod() {
 function buildChart(snaps, ourTrades, onurTrades, K) {
   if (snaps.length < 2) return '<div class="empty" style="padding:40px 0">Not enough data</div>';
 
-  const W = 700, H = 180, PAD = {t:12, b:22, l:55, r:12};
+  const W = 700, H = 180, PAD = {t:12, b:22, l:55, r:30};
   const pW = W - PAD.l - PAD.r;
   const pH = H - PAD.t - PAD.b;
 
@@ -477,6 +478,24 @@ function buildChart(snaps, ourTrades, onurTrades, K) {
     const kY = toY(K);
     kLine = `<line x1="${PAD.l}" y1="${kY}" x2="${W-PAD.r}" y2="${kY}" stroke="var(--yellow)" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>`;
     kLine += `<text x="${W-PAD.r+2}" y="${kY+3}" fill="var(--yellow)" font-size="8" opacity="0.6">K</text>`;
+  }
+
+  // UP ask price line (secondary axis 0-1, right side)
+  const upSnaps = snaps.filter(s => s.up_ask != null && s.up_ask > 0);
+  let upLine = '';
+  let upAxis = '';
+  if (upSnaps.length >= 2) {
+    const toYup = p => PAD.t + (1 - p) * pH; // 0 at bottom, 1 at top
+    let upPath = '';
+    upSnaps.forEach((s, i) => {
+      upPath += (i === 0 ? 'M' : 'L') + `${toX(s.remaining).toFixed(1)},${toYup(s.up_ask).toFixed(1)} `;
+    });
+    upLine = `<path d="${upPath}" fill="none" stroke="var(--green)" stroke-width="1" opacity="0.25" stroke-linejoin="round"/>`;
+    // Right Y-axis labels
+    for (let v = 0; v <= 1; v += 0.25) {
+      const y = toYup(v);
+      upAxis += `<text x="${W-PAD.r+4}" y="${y+3}" fill="var(--green)" font-size="7" opacity="0.3">${v.toFixed(2)}</text>`;
+    }
   }
 
   // Helper: find BTC price at a given remaining time
@@ -545,6 +564,7 @@ function buildChart(snaps, ourTrades, onurTrades, K) {
     ${grid}${yGrid}
     <path d="${areaPath}" fill="url(#areaFill)"/>
     ${kLine}
+    ${upLine}${upAxis}
     <path d="${path}" fill="none" stroke="var(--blue)" stroke-width="1.5" stroke-linejoin="round"/>
     ${onurMarkers}
     ${markers}
