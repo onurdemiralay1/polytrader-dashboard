@@ -170,8 +170,8 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',mo
     <table class="ptable">
       <thead><tr>
         <th>Time</th><th>Res</th>
-        <th>Buys</th><th>Up$</th><th>Dn$</th><th style="text-align:right">PnL</th><th style="text-align:right">Cum</th>
-        <th style="text-align:right;color:var(--cyan)">Onur #</th><th style="text-align:right;color:var(--cyan)">Onur PnL</th><th style="text-align:right;color:var(--cyan)">Onur Cum</th>
+        <th style="color:var(--blue)">Our #</th><th style="text-align:right;color:var(--blue)">Our PnL</th><th style="text-align:right;color:var(--blue)">Our Cum</th>
+        <th style="color:var(--cyan)">BSO #</th><th style="text-align:right;color:var(--cyan)">BSO PnL</th><th style="text-align:right;color:var(--cyan)">BSO Cum</th>
       </tr></thead>
       <tbody id="hist-body"></tbody>
     </table>
@@ -653,32 +653,53 @@ function renderCumChart() {
 
 function renderHistory() {
   const hist = state.history || [];
-  const onurPids = getOnurPeriods();
-  const resolved = hist.filter(h => h.resolution);
-  $('hist-sub').textContent = `${resolved.length} resolved | Onur overlap: ${[...onurPids].filter(p => resolved.some(h => String(h.period_ts) === p)).length}`;
+  const bsoPeriods = compData && compData.periods ? compData.periods : {};
+  const ourPeriods = oursData && oursData.periods ? oursData.periods : {};
 
-  const rows = hist.map(h => {
-    const isPending = !h.resolution;
-    const isWin = h.pnl != null && h.pnl > 0;
-    const cls = isPending ? 'pending' : (isWin ? 'winner' : 'loser');
-    const resColor = h.resolution === 'Up' ? 'var(--green)' : (h.resolution === 'Down' ? 'var(--red)' : 'var(--dim)');
+  // Merge all period timestamps
+  const allPids = new Set([
+    ...hist.map(h => String(h.period_ts)),
+    ...Object.keys(bsoPeriods),
+    ...Object.keys(ourPeriods),
+  ]);
+  const sorted = [...allPids].sort((a,b) => Number(b) - Number(a));
 
-    const op = compData && compData.periods ? compData.periods[String(h.period_ts)] : null;
-    const oPnl = op ? op.pnl : null;
-    const oCum = op ? op.cum_pnl : null;
-    const oN = op ? op.n : null;
+  const resolved = sorted.filter(p => {
+    const h = hist.find(x => String(x.period_ts) === p);
+    return h && h.resolution;
+  });
+  $('hist-sub').textContent = `${resolved.length} resolved periods`;
+
+  const rows = sorted.slice(0, 200).map(pid => {
+    const h = hist.find(x => String(x.period_ts) === pid);
+    const res = h ? h.resolution : null;
+    const timeStr = h ? h.time : new Date(Number(pid) * 1000).toISOString().substr(11, 5);
+    const isPending = !res;
+    const resColor = res === 'Up' ? 'var(--green)' : (res === 'Down' ? 'var(--red)' : 'var(--dim)');
+
+    const op = ourPeriods[pid];
+    const uPnl = op ? op.pnl : null;
+    const uCum = op ? op.cum_pnl : null;
+    const uN = op ? op.n : null;
+
+    const bp = bsoPeriods[pid];
+    const bPnl = bp ? bp.pnl : null;
+    const bCum = bp ? bp.cum_pnl : null;
+    const bN = bp ? bp.n : null;
+
+    const cls = isPending ? 'pending' : ((uPnl != null && uPnl > 0) ? 'winner' : 'loser');
+
+    const dash = '<span style="color:var(--border2)">-</span>';
 
     return `<tr class="${cls}">
-      <td>${h.time}</td>
-      <td style="color:${resColor};font-weight:600">${h.resolution || 'LIVE'}</td>
-      <td>${h.buys}</td>
-      <td>$${h.up_pos}</td>
-      <td>$${h.down_pos}</td>
-      <td style="text-align:right" class="${h.pnl != null ? pnlClass(h.pnl) : ''}">${h.pnl != null ? fmtPnl(h.pnl) : '-'}</td>
-      <td style="text-align:right" class="${pnlClass(h.cum_pnl)}">${fmtPnl(h.cum_pnl)}</td>
-      <td style="text-align:right;color:var(--cyan)">${oN != null ? oN : '<span style="color:var(--border2)">-</span>'}</td>
-      <td style="text-align:right" class="${oPnl != null ? pnlClass(oPnl) : ''}" style="color:var(--cyan)">${oPnl != null ? `<span style="color:${oPnl>=0?'var(--green)':'var(--red)'}">${fmtPnl(oPnl)}</span>` : '<span style="color:var(--border2)">-</span>'}</td>
-      <td style="text-align:right">${oCum != null ? `<span style="color:${oCum>=0?'var(--green)':'var(--red)'}">${fmtPnl(oCum)}</span>` : '<span style="color:var(--border2)">-</span>'}</td>
+      <td>${timeStr}</td>
+      <td style="color:${resColor};font-weight:600">${res || 'LIVE'}</td>
+      <td style="color:var(--blue)">${uN != null ? uN : dash}</td>
+      <td style="text-align:right">${uPnl != null ? `<span class="${pnlClass(uPnl)}">${fmtPnl(uPnl)}</span>` : dash}</td>
+      <td style="text-align:right">${uCum != null ? `<span class="${pnlClass(uCum)}">${fmtPnl(uCum)}</span>` : dash}</td>
+      <td style="color:var(--cyan)">${bN != null ? bN : dash}</td>
+      <td style="text-align:right">${bPnl != null ? `<span class="${pnlClass(bPnl)}">${fmtPnl(bPnl)}</span>` : dash}</td>
+      <td style="text-align:right">${bCum != null ? `<span class="${pnlClass(bCum)}">${fmtPnl(bCum)}</span>` : dash}</td>
     </tr>`;
   }).join('');
 
