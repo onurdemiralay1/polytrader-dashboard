@@ -40,7 +40,7 @@ def calc_fee(price, num_shares):
     return num_shares * fee_per_share
 
 COMPETITOR_WALLETS = [
-    {"name": "Onur", "addr": "0xe0229E10A858860218B6132F4234602C47bD6603"},
+    {"name": "BSO", "addr": "0xe0229E10A858860218B6132F4234602C47bD6603"},
     {"name": "Ours", "addr": "0xac5895eE371f5468e2a122247E90090202F8069a"},
 ]
 
@@ -89,6 +89,82 @@ def calc_portfolio_value(positions):
 
 _cache = {"data": None, "ts": 0}
 _comp_cache = {"data": None, "ts": 0}
+
+# Live price poller — fetches UP midpoint for current period chart
+_live_snaps = {}  # pid -> list of {ts, remaining, up_ask, ...}
+_live_price_pid = [0]  # current period being tracked
+_live_tokens = {}  # pid -> {"up": token_id, "down": token_id}
+
+
+def _get_current_tokens():
+    """Fetch token IDs for current 5-min period."""
+    import requests as req
+    pid = int(time.time() // PERIOD_S) * PERIOD_S
+    if pid in _live_tokens:
+        return pid, _live_tokens[pid]
+    url = f"https://gamma-api.polymarket.com/events/slug/btc-updown-5m-{pid}"
+    resp = req.get(url, timeout=5)
+    data = resp.json()["markets"][0]
+    tokens = json.loads(data["clobTokenIds"])
+    outcomes = json.loads(data["outcomes"])
+    if outcomes[0] == "Up":
+        _live_tokens[pid] = {"up": tokens[0], "down": tokens[1]}
+    else:
+        _live_tokens[pid] = {"up": tokens[1], "down": tokens[0]}
+    return pid, _live_tokens[pid]
+
+
+def _poll_live_price():
+    """Background thread: poll CLOB midpoint every 5s for current period chart."""
+    import threading
+    def loop():
+        while True:
+            try:
+                pid, tokens = _get_current_tokens()
+                if pid != _live_price_pid[0]:
+                    _live_price_pid[0] = pid
+                    _live_snaps[pid] = []
+
+                remaining = max(0, (pid + PERIOD_S) - time.time())
+
+                # Fetch UP midpoint
+                url = f"https://clob.polymarket.com/midpoint?token_id={tokens['up']}"
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    mid_data = json.loads(resp.read())
+                up_mid = float(mid_data.get("mid", 0))
+
+                if up_mid > 0:
+                    snap = {
+                        "ts": int(time.time() * 1000),
+                        "remaining": round(remaining, 1),
+                        "up_ask": up_mid,
+                        "down_ask": round(1 - up_mid, 4),
+                    }
+                    if pid not in _live_snaps:
+                        _live_snaps[pid] = []
+                    _live_snaps[pid].append(snap)
+
+                    # Also fetch price_to_hit for K line
+                    if not any(s.get("price_to_hit") for s in _live_snaps[pid]):
+                        try:
+                            pth_data = _fetch_period_price(pid)
+                            if pth_data.get("openPrice"):
+                                snap["price_to_hit"] = pth_data["openPrice"]
+                        except Exception:
+                            pass
+
+                # Cleanup old periods
+                for old_pid in list(_live_snaps.keys()):
+                    if old_pid < pid - PERIOD_S:
+                        del _live_snaps[old_pid]
+
+            except Exception:
+                pass
+            time.sleep(5)
+
+    t = threading.Thread(target=loop, daemon=True)
+    t.start()
 
 
 RES_CACHE_PATH = os.path.join(TRADES_DIR, "_resolutions.json")
@@ -424,7 +500,7 @@ def build_state(latency_ms=DEFAULT_LATENCY_MS):
             "trades": trades,
         })
 
-    # Current period snapshots
+    # Current period snapshots — from bot CSVs or live price poller
     current_snaps = []
     if current_pid in snapshot_rows:
         for r in snapshot_rows[current_pid]:
@@ -446,21 +522,34 @@ def build_state(latency_ms=DEFAULT_LATENCY_MS):
             except Exception:
                 pass
 
+    # Fallback to live price poller if no bot snapshots
+    if not current_snaps and current_pid in _live_snaps:
+        current_snaps = _live_snaps[current_pid]
+
+    # Extract price_to_hit from live snaps
+    live_k = None
+    for s in current_snaps:
+        if s.get("price_to_hit"):
+            live_k = s["price_to_hit"]
+            break
+
     latest = current_snaps[-1] if current_snaps else {}
     current_entry = next((h for h in history if h["period_ts"] == current_pid), None)
     resolved_count = sum(1 for h in history if h["resolution"])
+
+    remaining_now = max(0, (current_pid + PERIOD_S) - now)
 
     result = {
         "ts": int(now * 1000),
         "period_ts": current_pid,
         "period_time": datetime.fromtimestamp(current_pid, tz=timezone.utc).strftime("%H:%M") if current_pid else "",
-        "remaining": latest.get("remaining", 0),
-        "mode": "PAPER",
+        "remaining": latest.get("remaining", remaining_now),
+        "mode": "LIVE",
         "btc_raw": latest.get("btc_raw"),
         "btc_ema": latest.get("btc_ema"),
-        "price_to_hit": latest.get("price_to_hit"),
+        "price_to_hit": latest.get("price_to_hit") or live_k or period_k.get(current_pid),
         "sigma": latest.get("sigma"),
-        "p_up": latest.get("p_up"),
+        "p_up": latest.get("p_up") or latest.get("up_ask"),
         "premium": latest.get("premium"),
         "up_best_ask": latest.get("up_ask"),
         "down_best_ask": latest.get("down_ask"),
@@ -646,6 +735,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     _load_res_cache()
-    print(f"Taker 5min Dashboard API on :{PORT} ({len(_res_cache)} cached resolutions)")
+    _poll_live_price()
+    print(f"Taker 5min Dashboard API on :{PORT} ({len(_res_cache)} cached resolutions, live price poller started)")
     print(f"Reading from {TRADES_DIR}")
     HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

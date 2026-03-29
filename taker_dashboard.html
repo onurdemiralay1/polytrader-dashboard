@@ -211,7 +211,7 @@ async function fetchCompetitors() {
   try {
     const r = await fetch(apiUrl + '/competitors');
     const arr = await r.json();
-    compData = arr.find(w => w.name === 'Onur' && !w.error) || null;
+    compData = arr.find(w => w.name === 'BSO' && !w.error) || null;
     oursData = arr.find(w => w.name === 'Ours' && !w.error) || null;
     render();
   } catch(e) { /* silent */ }
@@ -298,7 +298,11 @@ function renderCurrentPeriod() {
     if (op && op.trades) onurTrades = op.trades;
   }
 
-  const chart = buildChart(snaps, trades, onurTrades, K, showBtc, showUp);
+  // Auto-enable UP chart if no BTC data available
+  const hasBtc = snaps.some(s => s.btc_raw != null);
+  const chartBtc = hasBtc ? showBtc : false;
+  const chartUp = hasBtc ? showUp : true;
+  const chart = buildChart(snaps, trades, onurTrades, K, chartBtc, chartUp);
 
   const upPos = cp ? cp.up_pos : 0;
   const dnPos = cp ? cp.down_pos : 0;
