@@ -289,20 +289,25 @@ function renderCurrentPeriod() {
   const secs = Math.floor(rem % 60);
   $('timer').textContent = `${mins}:${String(secs).padStart(2,'0')} remaining | K = $${K ? K.toLocaleString() : '?'}`;
 
-  const trades = cp ? cp.trades || [] : [];
+  // Get our trades from wallet API
+  let trades = [];
+  if (oursData && oursData.periods) {
+    const ourP = oursData.periods[String(state.period_ts)];
+    if (ourP && ourP.trades) trades = ourP.trades;
+  }
 
-  // Get Onur's trades for current period
-  let onurTrades = [];
+  // Get BSO's trades for current period
+  let bsoTrades = [];
   if (compData && compData.periods) {
     const op = compData.periods[String(state.period_ts)];
-    if (op && op.trades) onurTrades = op.trades;
+    if (op && op.trades) bsoTrades = op.trades;
   }
 
   // Auto-enable UP chart if no BTC data available
   const hasBtc = snaps.some(s => s.btc_raw != null);
   const chartBtc = hasBtc ? showBtc : false;
   const chartUp = hasBtc ? showUp : true;
-  const chart = buildChart(snaps, trades, onurTrades, K, chartBtc, chartUp);
+  const chart = buildChart(snaps, trades, bsoTrades, K, chartBtc, chartUp);
 
   const upPos = cp ? cp.up_pos : 0;
   const dnPos = cp ? cp.down_pos : 0;
@@ -371,27 +376,29 @@ function renderCurrentPeriod() {
   const upAskNow = state.up_best_ask;
   const dnAskNow = state.down_best_ask;
   const posCmpHtml = `<div class="pos-cmp">
-    ${posCol('Ours (Paper)', 'var(--blue)', trades, 'tokens', upAskNow, dnAskNow)}
-    ${posCol('Onur', 'var(--cyan)', onurTrades, 'shares', upAskNow, dnAskNow)}
+    ${posCol('Ours', 'var(--blue)', trades, 'shares', upAskNow, dnAskNow)}
+    ${posCol('BSO', 'var(--cyan)', bsoTrades, 'shares', upAskNow, dnAskNow)}
   </div>`;
 
   let tradesHtml = '';
   if (trades.length > 0) {
     const rows = trades.slice(-15).reverse().map(t => {
       const sideColor = t.side === 'UP' ? 'var(--green)' : 'var(--red)';
-      const fillTs = t.fill_ts || t.ts;
-      const time = new Date(fillTs).toISOString().substr(11, 8);
-      const fillRem = t.fill_remaining != null ? t.fill_remaining : t.remaining;
+      const ts = t.fill_ts || t.ts;
+      const time = new Date(ts).toISOString().substr(11, 8);
+      const rem = t.fill_remaining != null ? t.fill_remaining : (t.remaining || 0);
+      const shares = t.shares || t.tokens || 0;
+      const ask = t.ask || 0;
       return `<tr>
         <td>${time}</td>
         <td style="color:${sideColor};font-weight:600">${t.side}</td>
-        <td>${t.ask.toFixed(2)}</td>
-        <td>${t.tokens.toFixed(2)}</td>
-        <td style="color:var(--dim)">${fillRem.toFixed(0)}s</td>
+        <td>${ask.toFixed(2)}</td>
+        <td>${shares.toFixed(1)}</td>
+        <td style="color:var(--dim)">${rem.toFixed(0)}s</td>
       </tr>`;
     }).join('');
     tradesHtml = `<div class="trades-mini">
-      <table><thead><tr><th>Time</th><th>Side</th><th>Ask</th><th>Tokens</th><th>Rem</th></tr></thead>
+      <table><thead><tr><th>Time</th><th>Side</th><th>Ask</th><th>Shares</th><th>Rem</th></tr></thead>
       <tbody>${rows}</tbody></table>
     </div>`;
   }
@@ -402,8 +409,8 @@ function renderCurrentPeriod() {
       <span class="tog ${showUp?'on':''}" style="--c:var(--green)" onclick="showUp=!showUp;this.classList.toggle('on');renderCurrentPeriod()"><span class="pip"></span>UP ask</span>
       <span style="margin-left:6px"><span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:7px solid var(--green);margin-right:3px;vertical-align:middle"></span>Our UP</span>
       <span><span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--red);margin-right:3px;vertical-align:middle"></span>Our DN</span>
-      <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--cyan);opacity:.6;margin-right:3px;vertical-align:middle"></span>Onur UP</span>
-      <span><span style="display:inline-block;width:7px;height:7px;border:1.5px solid var(--cyan);border-radius:50%;opacity:.6;margin-right:3px;vertical-align:middle"></span>Onur DN</span>
+      <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--cyan);opacity:.6;margin-right:3px;vertical-align:middle"></span>BSO UP</span>
+      <span><span style="display:inline-block;width:7px;height:7px;border:1.5px solid var(--cyan);border-radius:50%;opacity:.6;margin-right:3px;vertical-align:middle"></span>BSO DN</span>
     </div>
     <div class="chart-wrap">${chart}</div>
     ${posCmpHtml}
