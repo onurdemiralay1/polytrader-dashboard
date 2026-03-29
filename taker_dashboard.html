@@ -181,7 +181,8 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',mo
 <script>
 const MAX_POS = 100;
 let state = null;
-let compData = null; // will hold single Onur wallet object
+let compData = null; // Onur wallet object
+let oursData = null; // Our wallet object
 let showBtc = true;
 let showUp = false;
 let apiUrl = localStorage.getItem('taker5m_api') || 'http://54.194.33.93:8765';
@@ -211,6 +212,7 @@ async function fetchCompetitors() {
     const r = await fetch(apiUrl + '/competitors');
     const arr = await r.json();
     compData = arr.find(w => w.name === 'Onur' && !w.error) || null;
+    oursData = arr.find(w => w.name === 'Ours' && !w.error) || null;
     render();
   } catch(e) { /* silent */ }
 }
@@ -232,7 +234,7 @@ function getOnurPeriods() {
 function render() {
   if (!state) return;
   const lat = state.latency_ms || 0;
-  $('mode-badge').textContent = lat > 0 ? `PAPER +${lat}ms` : 'PAPER (instant)';
+  $('mode-badge').textContent = oursData && oursData.n_trades > 0 ? 'LIVE' : (lat > 0 ? `PAPER +${lat}ms` : 'PAPER');
   renderH2H();
   renderCurrentPeriod();
   renderCumChart();
@@ -241,58 +243,32 @@ function render() {
 
 function renderH2H() {
   const strip = $('h2h-strip');
-  const onurPids = getOnurPeriods();
 
-  // Compute our head-to-head stats (only periods where Onur also traded)
-  const hist = state.history || [];
-  let ourH2H = {pnl:0, wins:0, resolved:0, buys:0, cost:0};
-  hist.forEach(h => {
-    if (!h.resolution || !onurPids.has(String(h.period_ts))) return;
-    ourH2H.pnl += h.pnl;
-    ourH2H.resolved++;
-    ourH2H.buys += h.buys;
-    ourH2H.cost += h.cost;
-    if (h.pnl > 0) ourH2H.wins++;
-  });
-
-  // Onur head-to-head (already computed server side, but only for resolved periods in our data)
-  const onur = compData || {};
-  const onurRes = onur.resolved || 0;
-  const h2hCount = ourH2H.resolved;
-
-  const ourCard = `<div class="h2h-card" style="--c:var(--blue)">
-    <div class="name"><span>Ours (Paper)</span><span class="tag" style="background:rgba(96,165,250,.15);color:var(--blue)">${h2hCount > 0 ? h2hCount + ' h2h periods' : state.periods_resolved + ' periods'}</span></div>
-    <div class="h2h-grid">
-      <div class="h2h-item"><div class="k">PnL</div><div class="v ${pnlClass(h2hCount > 0 ? ourH2H.pnl : state.total_pnl)}">${fmtPnl(h2hCount > 0 ? ourH2H.pnl : state.total_pnl)}</div></div>
-      <div class="h2h-item"><div class="k">Win Rate</div><div class="v">${h2hCount > 0 ? (100*ourH2H.wins/h2hCount).toFixed(1) : state.win_rate}%</div></div>
-      <div class="h2h-item"><div class="k">$/period</div><div class="v ${pnlClass(h2hCount > 0 ? ourH2H.pnl : state.total_pnl)}">${h2hCount > 0 ? fmtPnl(ourH2H.pnl/h2hCount) : (state.periods_resolved ? fmtPnl(state.total_pnl/state.periods_resolved) : '-')}</div></div>
-      <div class="h2h-item"><div class="k">Deployed</div><div class="v">$${h2hCount > 0 ? Math.round(ourH2H.cost) : state.total_buys*10}</div><div class="s">Fees: $${fmt(state.total_fees||0)} | Lat: ${state.latency_ms||0}ms</div></div>
-    </div>
-  </div>`;
-
-  let onurCard = '';
-  if (onur.name) {
-    const pnlPer = onurRes > 0 ? onur.total_pnl / onurRes : 0;
-    const cash = onur.cash != null ? `$${onur.cash.toLocaleString()}` : '?';
-    const portVal = onur.portfolio_value != null ? `$${onur.portfolio_value.toLocaleString()}` : '?';
-    const walletVal = onur.wallet_value != null ? `$${onur.wallet_value.toLocaleString()}` : '?';
-    onurCard = `<div class="h2h-card" style="--c:var(--cyan)">
-      <div class="name"><span>${onur.name} <span style="color:var(--dim);font-weight:400">${onur.addr}</span></span><span class="tag" style="background:rgba(34,211,238,.12);color:var(--cyan)">${onurRes} h2h periods</span></div>
+  function walletCard(w, color, colorVar, tagBg) {
+    if (!w || !w.name) return `<div class="h2h-card" style="--c:${colorVar}"><div class="name">Loading...</div><div class="empty" style="padding:10px">Fetching wallet data...</div></div>`;
+    const res = w.resolved || 0;
+    const pnlPer = res > 0 ? w.total_pnl / res : 0;
+    const cash = w.cash != null ? `$${w.cash.toLocaleString()}` : '?';
+    const portVal = w.portfolio_value != null ? `$${w.portfolio_value.toLocaleString()}` : '?';
+    const walletVal = w.wallet_value != null ? `$${w.wallet_value.toLocaleString()}` : '?';
+    return `<div class="h2h-card" style="--c:${colorVar}">
+      <div class="name"><span>${w.name} <span style="color:var(--dim);font-weight:400">${w.addr}</span></span><span class="tag" style="background:${tagBg};color:${colorVar}">${res} periods</span></div>
       <div class="h2h-grid">
-        <div class="h2h-item"><div class="k">PnL</div><div class="v ${pnlClass(onur.total_pnl)}">${fmtPnl(onur.total_pnl)}</div></div>
-        <div class="h2h-item"><div class="k">Win Rate</div><div class="v">${onur.win_rate}%</div></div>
+        <div class="h2h-item"><div class="k">PnL</div><div class="v ${pnlClass(w.total_pnl)}">${fmtPnl(w.total_pnl)}</div></div>
+        <div class="h2h-item"><div class="k">Win Rate</div><div class="v">${w.win_rate}%</div></div>
         <div class="h2h-item"><div class="k">$/period</div><div class="v ${pnlClass(pnlPer)}">${fmtPnl(pnlPer)}</div></div>
-        <div class="h2h-item"><div class="k">Deployed</div><div class="v">$${onur.total_cost?.toLocaleString() || '?'}</div><div class="s">${onur.n_trades} trades, ~60sh each</div></div>
+        <div class="h2h-item"><div class="k">Deployed</div><div class="v">$${w.total_cost?.toLocaleString() || '?'}</div><div class="s">${w.n_trades} trades</div></div>
       </div>
       <div style="display:flex;gap:16px;font-size:10px;color:var(--dim);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">
         <span>Cash: <b style="color:var(--text)">${cash}</b></span>
         <span>Positions: <b style="color:var(--text)">${portVal}</b></span>
-        <span>Wallet: <b style="color:var(--cyan)">${walletVal}</b></span>
+        <span>Wallet: <b style="color:${colorVar}">${walletVal}</b></span>
       </div>
     </div>`;
-  } else {
-    onurCard = `<div class="h2h-card" style="--c:var(--cyan)"><div class="name">Onur</div><div class="empty" style="padding:10px">Loading competitor data...</div></div>`;
   }
+
+  const ourCard = walletCard(oursData, 'blue', 'var(--blue)', 'rgba(96,165,250,.15)');
+  const onurCard = walletCard(compData, 'cyan', 'var(--cyan)', 'rgba(34,211,238,.12)');
 
   strip.innerHTML = ourCard + onurCard;
 }

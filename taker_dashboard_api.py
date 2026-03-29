@@ -18,13 +18,14 @@ from bisect import bisect_left
 from urllib.parse import urlparse, parse_qs
 
 TRADES_DIR = "/home/ubuntu/bot_stop4/trades_taker_5m"
-ORDER_SIZE = 10.0
-MAX_NET_POSITION = 100.0
+ORDER_SIZE = 60.0
+MAX_NET_POSITION = 600.0
 START_BALANCE = 300.0
 PORT = 8765
+PERIOD_S = 300
 CACHE_TTL = 2
 COMP_CACHE_TTL = 15
-DEFAULT_LATENCY_MS = 150  # Onur: BSO fiber Tokyo→Amsterdam ~85ms + precomputed order ~40ms + matching ~25ms
+DEFAULT_LATENCY_MS = 350  # full round-trip POST latency
 
 # Polymarket crypto category fee formula (until 2026-03-29)
 FEE_RATE = 0.25
@@ -40,6 +41,7 @@ def calc_fee(price, num_shares):
 
 COMPETITOR_WALLETS = [
     {"name": "Onur", "addr": "0xe0229E10A858860218B6132F4234602C47bD6603"},
+    {"name": "Ours", "addr": "0xac5895eE371f5468e2a122247E90090202F8069a"},
 ]
 
 # On-chain balance lookup
@@ -89,23 +91,113 @@ _cache = {"data": None, "ts": 0}
 _comp_cache = {"data": None, "ts": 0}
 
 
+RES_CACHE_PATH = os.path.join(TRADES_DIR, "_resolutions.json")
+_res_cache = {}  # pid_str -> {"k": openPrice, "res": "Up"/"Down"/None}
+
+
+def _load_res_cache():
+    """Load resolution cache from disk."""
+    global _res_cache
+    try:
+        with open(RES_CACHE_PATH) as f:
+            _res_cache = json.load(f)
+    except Exception:
+        _res_cache = {}
+
+
+def _save_res_cache():
+    """Persist resolution cache to disk."""
+    try:
+        with open(RES_CACHE_PATH, "w") as f:
+            json.dump(_res_cache, f)
+    except Exception:
+        pass
+
+
+def _fetch_period_price(pid):
+    """Fetch openPrice and closePrice from Polymarket crypto-price API."""
+    start_dt = datetime.fromtimestamp(pid, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end_dt = datetime.fromtimestamp(pid + PERIOD_S, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    url = (f"https://polymarket.com/api/crypto/crypto-price?symbol=BTC"
+           f"&eventStartTime={start_dt}&endDate={end_dt}&variant=fiveminute")
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        return json.loads(resp.read())
+
+
 def get_resolutions():
-    """Load K per period and compute resolutions."""
+    """Fetch openPrice/closePrice from Polymarket API for each period."""
+    all_pids = set()
+    for pattern in ["snapshots_*.csv", "paper_*.csv"]:
+        for f in glob.glob(os.path.join(TRADES_DIR, pattern)):
+            base = os.path.basename(f)
+            pid = int(base.split("_", 1)[1].replace(".csv", ""))
+            all_pids.add(pid)
+
+    # Fill up to current time so resolutions are fetched even without our bot running
+    if all_pids:
+        now_pid = int(time.time() // PERIOD_S) * PERIOD_S
+        pid = min(all_pids)
+        while pid <= now_pid:
+            all_pids.add(pid)
+            pid += PERIOD_S
+
     period_k = {}
-    for f in sorted(glob.glob(os.path.join(TRADES_DIR, "snapshots_*.csv"))):
-        pid = int(os.path.basename(f).replace("snapshots_", "").replace(".csv", ""))
-        try:
-            with open(f) as fh:
-                first = next(csv.DictReader(fh), None)
-                if first:
-                    period_k[pid] = float(first["price_to_hit"])
-        except Exception:
-            pass
     resolutions = {}
-    for pid in sorted(period_k):
-        nxt = pid + 300
-        if nxt in period_k:
-            resolutions[pid] = "Up" if period_k[nxt] > period_k[pid] else "Down"
+    fetched = 0
+
+    for pid in sorted(all_pids):
+        pid_s = str(pid)
+        # Use cache for already-resolved periods
+        if pid_s in _res_cache and _res_cache[pid_s].get("res") is not None:
+            cached = _res_cache[pid_s]
+            period_k[pid] = cached["k"]
+            resolutions[pid] = cached["res"]
+            continue
+
+        # Limit API calls per invocation to avoid blocking
+        if fetched >= 50:
+            # Use snapshot K as fallback for remaining periods
+            snap_path = os.path.join(TRADES_DIR, f"snapshots_{pid}.csv")
+            try:
+                with open(snap_path) as fh:
+                    first = next(csv.DictReader(fh), None)
+                    if first:
+                        period_k[pid] = float(first["price_to_hit"])
+            except Exception:
+                pass
+            continue
+
+        try:
+            data = _fetch_period_price(pid)
+            fetched += 1
+            op = data.get("openPrice")
+            cp = data.get("closePrice")
+            completed = data.get("completed", False)
+
+            if op is not None:
+                period_k[pid] = op
+
+            if op is not None and cp is not None and completed:
+                res = "Up" if cp > op else "Down"
+                resolutions[pid] = res
+                _res_cache[pid_s] = {"k": op, "res": res}
+            elif op is not None:
+                period_k[pid] = op
+                _res_cache[pid_s] = {"k": op, "res": None}
+        except Exception:
+            snap_path = os.path.join(TRADES_DIR, f"snapshots_{pid}.csv")
+            try:
+                with open(snap_path) as fh:
+                    first = next(csv.DictReader(fh), None)
+                    if first:
+                        period_k[pid] = float(first["price_to_hit"])
+            except Exception:
+                pass
+
+    if fetched > 0:
+        _save_res_cache()
+
     return period_k, resolutions
 
 
@@ -194,7 +286,7 @@ def simulate_period(sigs, snapshots=None, latency_ms=DEFAULT_LATENCY_MS):
 
         if ask <= 0:
             continue
-        if sz < ORDER_SIZE:
+        if sz > 0 and sz < ORDER_SIZE:
             continue
 
         # Net position check (in shares)
@@ -266,8 +358,18 @@ def build_state(latency_ms=DEFAULT_LATENCY_MS):
         except Exception:
             pass
 
-    all_pids = sorted(set(list(period_k.keys()) + list(signals_by_period.keys())))
-    current_pid = all_pids[-1] if all_pids else 0
+    # Include recent periods even if we have no data (so Onur's h2h still shows)
+    now_pid = int(time.time() // PERIOD_S) * PERIOD_S
+    all_pids_set = set(list(period_k.keys()) + list(signals_by_period.keys()))
+    if all_pids_set:
+        earliest = min(all_pids_set)
+        # Fill in all 5-min periods from earliest to now
+        pid = earliest
+        while pid <= now_pid:
+            all_pids_set.add(pid)
+            pid += PERIOD_S
+    all_pids = sorted(all_pids_set)
+    current_pid = now_pid
 
     # Simulate each period
     history = []
@@ -395,10 +497,16 @@ def build_competitors():
 
     for w in COMPETITOR_WALLETS:
         try:
-            url = f"https://data-api.polymarket.com/activity?user={w['addr']}&limit=1000"
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            resp = urllib.request.urlopen(req, timeout=10)
-            data = json.loads(resp.read())
+            all_data = []
+            for offset in range(0, 4000, 1000):
+                url = f"https://data-api.polymarket.com/activity?user={w['addr']}&limit=1000&offset={offset}"
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                resp = urllib.request.urlopen(req, timeout=15)
+                page = json.loads(resp.read())
+                all_data.extend(page)
+                if len(page) < 1000:
+                    break
+            data = all_data
         except Exception as e:
             result.append({"name": w["name"], "addr": w["addr"][:10] + "...", "error": str(e)})
             continue
@@ -537,6 +645,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(f"Taker 5min Dashboard API on :{PORT}")
+    _load_res_cache()
+    print(f"Taker 5min Dashboard API on :{PORT} ({len(_res_cache)} cached resolutions)")
     print(f"Reading from {TRADES_DIR}")
     HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
