@@ -663,22 +663,23 @@ function renderHistory() {
   const bsoPeriods = compData && compData.periods ? compData.periods : {};
   const ourPeriods = oursData && oursData.periods ? oursData.periods : {};
 
+  // Build fast lookup for resolutions
+  const resMap = {};
+  hist.forEach(h => { resMap[String(h.period_ts)] = h; });
+
   // Merge all period timestamps
   const allPids = new Set([
-    ...hist.map(h => String(h.period_ts)),
+    ...Object.keys(resMap),
     ...Object.keys(bsoPeriods),
     ...Object.keys(ourPeriods),
   ]);
   const sorted = [...allPids].sort((a,b) => Number(b) - Number(a));
 
-  const resolved = sorted.filter(p => {
-    const h = hist.find(x => String(x.period_ts) === p);
-    return h && h.resolution;
-  });
-  $('hist-sub').textContent = `${resolved.length} resolved periods`;
+  const resolvedCount = sorted.filter(p => resMap[p] && resMap[p].resolution).length;
+  $('hist-sub').textContent = `${resolvedCount} resolved periods`;
 
   const rows = sorted.slice(0, 200).map(pid => {
-    const h = hist.find(x => String(x.period_ts) === pid);
+    const h = resMap[pid];
     const res = h ? h.resolution : null;
     const timeStr = h ? h.time : new Date(Number(pid) * 1000).toISOString().substr(11, 5);
     const isPending = !res;
