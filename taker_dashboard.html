@@ -74,7 +74,7 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',mo
 .comp-cur b{color:var(--text);font-weight:500}
 
 /* Side-by-side positions comparison */
-.pos-cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.pos-cmp{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px}
 .pos-cmp-col{border:1px solid var(--border);border-radius:5px;padding:10px 12px;position:relative}
 .pos-cmp-col::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:5px 5px 0 0;background:var(--c)}
 .pos-cmp-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
@@ -307,11 +307,18 @@ function renderCurrentPeriod() {
     if (op && op.trades) bsoTrades = op.trades;
   }
 
+  // Get Comp3's trades for current period
+  let c3Trades = [];
+  if (comp3Data && comp3Data.periods) {
+    const c3p = comp3Data.periods[String(state.period_ts)];
+    if (c3p && c3p.trades) c3Trades = c3p.trades;
+  }
+
   // Auto-enable UP chart if no BTC data available
   const hasBtc = snaps.some(s => s.btc_raw != null);
   const chartBtc = hasBtc ? showBtc : false;
   const chartUp = hasBtc ? showUp : true;
-  const chart = buildChart(snaps, trades, bsoTrades, K, chartBtc, chartUp);
+  const chart = buildChart(snaps, trades, bsoTrades, c3Trades, K, chartBtc, chartUp);
 
   const upPos = cp ? cp.up_pos : 0;
   const dnPos = cp ? cp.down_pos : 0;
@@ -382,6 +389,7 @@ function renderCurrentPeriod() {
   const posCmpHtml = `<div class="pos-cmp">
     ${posCol('Ours', 'var(--blue)', trades, 'shares', upAskNow, dnAskNow)}
     ${posCol('BSO', 'var(--cyan)', bsoTrades, 'shares', upAskNow, dnAskNow)}
+    ${posCol('C3', 'var(--orange)', c3Trades, 'shares', upAskNow, dnAskNow)}
   </div>`;
 
   let tradesHtml = '';
@@ -415,6 +423,8 @@ function renderCurrentPeriod() {
       <span><span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--red);margin-right:3px;vertical-align:middle"></span>Our DN</span>
       <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--cyan);opacity:.6;margin-right:3px;vertical-align:middle"></span>BSO UP</span>
       <span><span style="display:inline-block;width:7px;height:7px;border:1.5px solid var(--cyan);border-radius:50%;opacity:.6;margin-right:3px;vertical-align:middle"></span>BSO DN</span>
+      <span><span style="display:inline-block;width:7px;height:7px;background:var(--orange);opacity:.6;margin-right:3px;vertical-align:middle;transform:rotate(45deg)"></span>C3 UP</span>
+      <span><span style="display:inline-block;width:7px;height:7px;border:1.5px solid var(--orange);opacity:.6;margin-right:3px;vertical-align:middle;transform:rotate(45deg)"></span>C3 DN</span>
     </div>
     <div class="chart-wrap">${chart}</div>
     ${posCmpHtml}
@@ -430,7 +440,7 @@ function renderCurrentPeriod() {
   `;
 }
 
-function buildChart(snaps, ourTrades, onurTrades, K, btcOn, upOn) {
+function buildChart(snaps, ourTrades, onurTrades, c3Trades, K, btcOn, upOn) {
   if (snaps.length < 2) return '<div class="empty" style="padding:40px 0">Not enough data</div>';
 
   const W = 700, H = 180, PAD = {t:12, b:22, l:55, r: upOn ? 30 : 12};
@@ -559,6 +569,25 @@ function buildChart(snaps, ourTrades, onurTrades, K, btcOn, upOn) {
     onurMarkers += `<g class="mk">${shape}<rect x="${x-14}" y="${labelY-8}" width="28" height="11" rx="2" fill="var(--surface)" stroke="#22d3ee" stroke-width="0.5" opacity="0.9" class="mk-bg"/><text x="${x}" y="${labelY}" text-anchor="middle" fill="#22d3ee" font-size="8" font-weight="600" class="mk-lbl">${price}</text><rect x="${x-5}" y="${y+dy-6}" width="10" height="12" fill="transparent" class="mk-hit"/></g>`;
   });
 
+  // Comp3 markers (diamonds — filled for UP, hollow for DOWN)
+  let c3Markers = '';
+  (c3Trades || []).forEach(t => {
+    const x = toX(t.remaining);
+    const y = markerY(t.remaining);
+    const isUp = t.side === 'UP';
+    const dy = isUp ? -22 : 22;
+    const markerTop = y + dy - 4;
+    const labelY = markerTop - 4;
+    const price = t.ask != null ? t.ask.toFixed(2) : '';
+    let shape;
+    if (isUp) {
+      shape = `<rect x="${x-2.5}" y="${y+dy-2.5}" width="5" height="5" fill="#fb923c" opacity="0.5" transform="rotate(45,${x},${y+dy})"/>`;
+    } else {
+      shape = `<rect x="${x-2.5}" y="${y+dy-2.5}" width="5" height="5" fill="none" stroke="#fb923c" stroke-width="1.5" opacity="0.5" transform="rotate(45,${x},${y+dy})"/>`;
+    }
+    c3Markers += `<g class="mk">${shape}<rect x="${x-14}" y="${labelY-8}" width="28" height="11" rx="2" fill="var(--surface)" stroke="#fb923c" stroke-width="0.5" opacity="0.9" class="mk-bg"/><text x="${x}" y="${labelY}" text-anchor="middle" fill="#fb923c" font-size="8" font-weight="600" class="mk-lbl">${price}</text><rect x="${x-5}" y="${y+dy-6}" width="10" height="12" fill="transparent" class="mk-hit"/></g>`;
+  });
+
   // Current price dot(s)
   let curDot = '';
   if (snaps.length > 0) {
@@ -587,6 +616,7 @@ function buildChart(snaps, ourTrades, onurTrades, K, btcOn, upOn) {
     ${upLine}${upAxis}
     ${btcLine}
     ${onurMarkers}
+    ${c3Markers}
     ${markers}
     ${curDot}
   </svg>`;
