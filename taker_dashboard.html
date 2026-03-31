@@ -25,7 +25,7 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',mo
 .rbtn:hover{color:var(--text);border-color:var(--border2)}
 
 /* Head-to-head comparison strip */
-.h2h-strip{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.h2h-strip{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px}
 .h2h-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 14px;position:relative;overflow:hidden}
 .h2h-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--c)}
 .h2h-card .name{font-size:11px;font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
@@ -172,6 +172,7 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',mo
         <th>Time</th><th>Res</th>
         <th style="color:var(--blue)">Our #</th><th style="text-align:right;color:var(--blue)">Our PnL</th><th style="text-align:right;color:var(--blue)">Our Cum</th>
         <th style="color:var(--cyan)">BSO #</th><th style="text-align:right;color:var(--cyan)">BSO PnL</th><th style="text-align:right;color:var(--cyan)">BSO Cum</th>
+        <th style="color:var(--orange)">C3 #</th><th style="text-align:right;color:var(--orange)">C3 PnL</th><th style="text-align:right;color:var(--orange)">C3 Cum</th>
       </tr></thead>
       <tbody id="hist-body"></tbody>
     </table>
@@ -181,8 +182,9 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',mo
 <script>
 const MAX_POS = 100;
 let state = null;
-let compData = null; // Onur wallet object
+let compData = null; // BSO wallet object
 let oursData = null; // Our wallet object
+let comp3Data = null; // Comp3 wallet object
 let showBtc = true;
 let showUp = false;
 let apiUrl = localStorage.getItem('taker5m_api') || 'http://54.194.33.93:8765';
@@ -213,6 +215,7 @@ async function fetchCompetitors() {
     const arr = await r.json();
     compData = arr.find(w => w.name === 'BSO' && !w.error) || null;
     oursData = arr.find(w => w.name === 'Ours' && !w.error) || null;
+    comp3Data = arr.find(w => w.name === 'Comp3' && !w.error) || null;
     render();
   } catch(e) { /* silent */ }
 }
@@ -269,8 +272,9 @@ function renderH2H() {
 
   const ourCard = walletCard(oursData, 'blue', 'var(--blue)', 'rgba(96,165,250,.15)');
   const onurCard = walletCard(compData, 'cyan', 'var(--cyan)', 'rgba(34,211,238,.12)');
+  const comp3Card = walletCard(comp3Data, 'orange', 'var(--orange)', 'rgba(251,146,60,.12)');
 
-  strip.innerHTML = ourCard + onurCard;
+  strip.innerHTML = ourCard + onurCard + comp3Card;
 }
 
 function renderCurrentPeriod() {
@@ -662,6 +666,7 @@ function renderHistory() {
   const hist = state.history || [];
   const bsoPeriods = compData && compData.periods ? compData.periods : {};
   const ourPeriods = oursData && oursData.periods ? oursData.periods : {};
+  const c3Periods = comp3Data && comp3Data.periods ? comp3Data.periods : {};
 
   // Build fast lookup for resolutions
   const resMap = {};
@@ -672,6 +677,7 @@ function renderHistory() {
     ...Object.keys(resMap),
     ...Object.keys(bsoPeriods),
     ...Object.keys(ourPeriods),
+    ...Object.keys(c3Periods),
   ]);
   const sorted = [...allPids].sort((a,b) => Number(b) - Number(a));
 
@@ -695,6 +701,11 @@ function renderHistory() {
     const bCum = bp ? bp.cum_pnl : null;
     const bN = bp ? bp.n : null;
 
+    const c3p = c3Periods[pid];
+    const c3Pnl = c3p ? c3p.pnl : null;
+    const c3Cum = c3p ? c3p.cum_pnl : null;
+    const c3N = c3p ? c3p.n : null;
+
     const cls = isPending ? 'pending' : ((uPnl != null && uPnl > 0) ? 'winner' : 'loser');
 
     const dash = '<span style="color:var(--border2)">-</span>';
@@ -708,6 +719,9 @@ function renderHistory() {
       <td style="color:var(--cyan)">${bN != null ? bN : dash}</td>
       <td style="text-align:right">${bPnl != null ? `<span class="${pnlClass(bPnl)}">${fmtPnl(bPnl)}</span>` : dash}</td>
       <td style="text-align:right">${bCum != null ? `<span class="${pnlClass(bCum)}">${fmtPnl(bCum)}</span>` : dash}</td>
+      <td style="color:var(--orange)">${c3N != null ? c3N : dash}</td>
+      <td style="text-align:right">${c3Pnl != null ? `<span class="${pnlClass(c3Pnl)}">${fmtPnl(c3Pnl)}</span>` : dash}</td>
+      <td style="text-align:right">${c3Cum != null ? `<span class="${pnlClass(c3Cum)}">${fmtPnl(c3Cum)}</span>` : dash}</td>
     </tr>`;
   }).join('');
 
