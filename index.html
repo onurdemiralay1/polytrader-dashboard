@@ -153,8 +153,9 @@ async function fetchActivity(address, limit=500, maxPages=8) {
   for (let page = 0; page < maxPages; page++) {
     try {
       const r = await fetch(`https://data-api.polymarket.com/activity?user=${address}&limit=${limit}&offset=${page*limit}`);
+      if (!r.ok) break;
       const data = await r.json();
-      if (!data || !data.length) break;
+      if (!data || !Array.isArray(data) || !data.length) break;
       all.push(...data);
       if (data.length < limit) break;
     } catch(e) {
