@@ -238,6 +238,7 @@ function getOnurPeriods() {
   return new Set(Object.keys(compData.periods));
 }
 
+let _lastCompJson = '';
 function render() {
   if (!state) return;
   const lat = state.latency_ms || 0;
@@ -246,7 +247,9 @@ function render() {
   renderH2H();
   renderCurrentPeriod();
   renderCumChart();
-  renderHistory();
+  // Only re-render history when competitor data changes
+  const compJson = JSON.stringify(Object.keys(walletData).map(k => walletData[k]?.n_trades));
+  if (compJson !== _lastCompJson) { _lastCompJson = compJson; renderHistory(); }
 }
 
 function renderH2H() {
@@ -257,17 +260,19 @@ function renderH2H() {
     const res = w.resolved || 0;
     const pnlPer = res > 0 ? w.total_pnl / res : 0;
     const walletVal = w.wallet_value != null ? `$${Math.round(w.wallet_value).toLocaleString()}` : '?';
+    const pnlInt = w.total_pnl >= 0 ? '+$' + Math.round(w.total_pnl) : '-$' + Math.abs(Math.round(w.total_pnl));
+    const pnlPerInt = pnlPer >= 0 ? '+$' + Math.round(pnlPer) : '-$' + Math.abs(Math.round(pnlPer));
     return `<div class="h2h-card" style="--c:${colorVar}">
-      <div class="name"><span>${w.name}</span><span style="font-size:9px;color:var(--dim);font-weight:400;margin-left:4px">${walletVal}</span></div>
+      <div class="name"><span>${w.name}</span><span style="font-size:9px;color:var(--dim);font-weight:400;margin-left:4px;cursor:pointer" onclick="navigator.clipboard.writeText('${w.full_addr||w.addr}');this.textContent='copied!';setTimeout(()=>this.textContent='${w.addr}',1000)" title="${w.full_addr||w.addr}">${w.addr}</span></div>
       <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px">
-        <span class="${pnlClass(w.total_pnl)}" style="font-size:18px;font-weight:700">${fmtPnl(w.total_pnl)}</span>
-        <span style="font-size:10px;color:var(--dim)">${w.win_rate}% WR</span>
-        <span style="font-size:10px;color:var(--dim)">${w.n_trades} t</span>
-        <span style="font-size:10px" class="${pnlClass(pnlPer)}">${fmtPnl(pnlPer)}/p</span>
+        <span class="${pnlClass(w.total_pnl)}" style="font-size:18px;font-weight:700">${pnlInt}</span>
+        <span style="font-size:10px;color:var(--dim)">${w.win_rate}%</span>
+        <span style="font-size:10px;color:var(--dim)">${w.n_trades}t</span>
+        <span style="font-size:10px" class="${pnlClass(pnlPer)}">${pnlPerInt}/p</span>
       </div>
       <div style="display:flex;gap:12px;font-size:9px;color:var(--dim);margin-top:4px">
-        <span>Cash <b style="color:var(--text)">${w.cash != null ? '$'+Math.round(w.cash).toLocaleString() : '?'}</b></span>
-        <span>Pos <b style="color:var(--text)">${w.portfolio_value != null ? '$'+Math.round(w.portfolio_value).toLocaleString() : '?'}</b></span>
+        <span>Cash <b style="color:var(--text)">$${w.cash != null ? Math.round(w.cash).toLocaleString() : '?'}</b></span>
+        <span>Pos <b style="color:var(--text)">$${w.portfolio_value != null ? Math.round(w.portfolio_value).toLocaleString() : '?'}</b></span>
       </div>
     </div>`;
   }
@@ -678,7 +683,7 @@ function renderHistory() {
     wNames.map(n => `<th style="color:${WALLETS[n].color}">${n} #</th><th style="text-align:right;color:${WALLETS[n].color}">PnL</th><th style="text-align:right;color:${WALLETS[n].color}">Cum</th>`).join('');
 
   const dash = '<span style="color:var(--border2)">-</span>';
-  const rows = sorted.slice(0, 200).map(pid => {
+  const rows = sorted.slice(0, 50).map(pid => {
     const h = resMap[pid];
     const res = h ? h.resolution : null;
     const timeStr = h ? h.time : new Date(Number(pid) * 1000).toISOString().substr(11, 5);
