@@ -678,7 +678,7 @@ function _renderHistoryInner() {
   });
 
   // Merge all period timestamps
-  const HISTORY_CUTOFF = 1775045400; // 2026-04-01 12:10 UTC
+  const HISTORY_CUTOFF = 1775050200; // 2026-04-01 13:30 UTC
   const allPids = new Set(Object.keys(resMap));
   Object.values(walletPeriods).forEach(p => Object.keys(p).forEach(k => allPids.add(k)));
   const sorted = [...allPids].filter(p => Number(p) >= HISTORY_CUTOFF).sort((a,b) => Number(b) - Number(a));
