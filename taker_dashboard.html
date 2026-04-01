@@ -219,6 +219,7 @@ async function fetchCompetitors() {
     const arr = await r.json();
     walletData = {};
     arr.forEach(w => { if (!w.error) walletData[w.name] = w; });
+    renderHistory();
     render();
   } catch(e) { /* silent */ }
 }
@@ -241,15 +242,16 @@ function getOnurPeriods() {
 let _lastCompJson = '';
 function render() {
   if (!state) return;
-  const lat = state.latency_ms || 0;
-  const ours = getWallet('Ours');
-  $('mode-badge').textContent = ours && ours.n_trades > 0 ? 'LIVE' : (lat > 0 ? `PAPER +${lat}ms` : 'PAPER');
-  renderH2H();
-  renderCurrentPeriod();
-  renderCumChart();
-  // Only re-render history when competitor data changes
-  const compJson = JSON.stringify(Object.keys(walletData).map(k => walletData[k]?.n_trades));
-  if (compJson !== _lastCompJson) { _lastCompJson = compJson; renderHistory(); }
+  try {
+    const lat = state.latency_ms || 0;
+    const ours = getWallet('Ours');
+    $('mode-badge').textContent = ours && ours.n_trades > 0 ? 'LIVE' : (lat > 0 ? `PAPER +${lat}ms` : 'PAPER');
+    renderH2H();
+    renderCurrentPeriod();
+    renderCumChart();
+    const compJson = JSON.stringify(Object.keys(walletData).map(k => walletData[k]?.n_trades));
+    if (compJson !== _lastCompJson) { _lastCompJson = compJson; renderHistory(); }
+  } catch(e) { console.error('render error:', e); }
 }
 
 function renderH2H() {
@@ -658,6 +660,9 @@ function renderCumChart() {
 }
 
 function renderHistory() {
+  try { _renderHistoryInner(); } catch(e) { console.error('history error:', e); $('hist-body').innerHTML = '<tr><td colspan="20">Error: '+e.message+'</td></tr>'; }
+}
+function _renderHistoryInner() {
   const hist = state.history || [];
   const resMap = {};
   hist.forEach(h => { resMap[String(h.period_ts)] = h; });
