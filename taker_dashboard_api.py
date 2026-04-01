@@ -42,9 +42,9 @@ def calc_fee(price, num_shares):
     return num_shares * fee_per_share
 
 COMPETITOR_WALLETS = [
-    {"name": "BSO", "addr": "0xe0229E10A858860218B6132F4234602C47bD6603"},
+    {"name": "Sampiyon", "addr": "0xe0229E10A858860218B6132F4234602C47bD6603"},
     {"name": "Ours", "addr": "0xac5895eE371f5468e2a122247E90090202F8069a"},
-    {"name": "C3", "addr": "0x965659485992e51f04F532e964e56Ca2c6AEE340"},
+    {"name": "SignalSum", "addr": "0x965659485992e51f04F532e964e56Ca2c6AEE340"},
     {"name": "C4", "addr": "0x8Ef6a1cc3fb81a0e2c3eb405a09ce497a23563ee"},
     {"name": "C5", "addr": "0xeFf1A802Da3ba500e051686Ce10c354e7338A25c"},
 ]
