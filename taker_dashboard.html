@@ -26,7 +26,7 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',mo
 
 /* Head-to-head comparison strip */
 .h2h-strip{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px}
-.h2h-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 14px;position:relative;overflow:hidden}
+.h2h-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 12px;position:relative;overflow:hidden}
 .h2h-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--c)}
 .h2h-card .name{font-size:11px;font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
 .h2h-card .name .tag{font-size:9px;padding:1px 5px;border-radius:3px;font-weight:400}
@@ -253,24 +253,17 @@ function renderH2H() {
   const strip = $('h2h-strip');
 
   function walletCard(w, name, colorVar, tagBg) {
-    if (!w || !w.name) return `<div class="h2h-card" style="--c:${colorVar}"><div class="name">${name}</div><div class="empty" style="padding:10px">Loading...</div></div>`;
+    if (!w || !w.name) return `<div class="h2h-card" style="--c:${colorVar}"><div class="name">${name}</div><div class="empty" style="padding:6px;font-size:10px">...</div></div>`;
     const res = w.resolved || 0;
     const pnlPer = res > 0 ? w.total_pnl / res : 0;
-    const cash = w.cash != null ? `$${w.cash.toLocaleString()}` : '?';
-    const portVal = w.portfolio_value != null ? `$${w.portfolio_value.toLocaleString()}` : '?';
-    const walletVal = w.wallet_value != null ? `$${w.wallet_value.toLocaleString()}` : '?';
+    const walletVal = w.wallet_value != null ? `$${Math.round(w.wallet_value).toLocaleString()}` : '?';
     return `<div class="h2h-card" style="--c:${colorVar}">
-      <div class="name"><span>${w.name} <span style="color:var(--dim);font-weight:400">${w.addr}</span></span><span class="tag" style="background:${tagBg};color:${colorVar}">${res} periods</span></div>
-      <div class="h2h-grid">
-        <div class="h2h-item"><div class="k">PnL</div><div class="v ${pnlClass(w.total_pnl)}">${fmtPnl(w.total_pnl)}</div></div>
-        <div class="h2h-item"><div class="k">Win Rate</div><div class="v">${w.win_rate}%</div></div>
-        <div class="h2h-item"><div class="k">$/period</div><div class="v ${pnlClass(pnlPer)}">${fmtPnl(pnlPer)}</div></div>
-        <div class="h2h-item"><div class="k">Deployed</div><div class="v">$${w.total_cost?.toLocaleString() || '?'}</div><div class="s">${w.n_trades} trades</div></div>
-      </div>
-      <div style="display:flex;gap:16px;font-size:10px;color:var(--dim);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">
-        <span>Cash: <b style="color:var(--text)">${cash}</b></span>
-        <span>Positions: <b style="color:var(--text)">${portVal}</b></span>
-        <span>Wallet: <b style="color:${colorVar}">${walletVal}</b></span>
+      <div class="name"><span>${w.name}</span><span style="font-size:9px;color:var(--dim);font-weight:400;margin-left:4px">${walletVal}</span></div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px">
+        <span class="${pnlClass(w.total_pnl)}" style="font-size:18px;font-weight:700">${fmtPnl(w.total_pnl)}</span>
+        <span style="font-size:10px;color:var(--dim)">${w.win_rate}% WR</span>
+        <span style="font-size:10px;color:var(--dim)">${w.n_trades} trades</span>
+        <span style="font-size:10px;color:var(--dim)" class="${pnlClass(pnlPer)}">${fmtPnl(pnlPer)}/p</span>
       </div>
     </div>`;
   }
