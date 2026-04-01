@@ -592,16 +592,19 @@ function buildChart(snaps, allWalletTrades, K, btcOn, upOn) {
 function renderCumChart() {
   const wrap = $('cum-chart-wrap');
   const hist = state.history;
-  const resolved = hist.filter(h => h.resolution);
+  const HISTORY_CUTOFF = 1775045400;
+  const resolved = hist.filter(h => h.resolution && h.period_ts >= HISTORY_CUTOFF);
   if (resolved.length < 2) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
 
   const data = resolved.slice().reverse();
+  // Rebase cumulative PnL from cutoff
+  const baseOffset = data.length > 0 ? (data[0].cum_pnl - data[0].pnl) : 0;
   const W = 700, H = 50, PAD = {l:40, r:8, t:4, b:4};
   const pW = W - PAD.l - PAD.r;
   const pH = H - PAD.t - PAD.b;
 
-  const ourVals = data.map(d => d.cum_pnl);
+  const ourVals = data.map(d => d.cum_pnl - baseOffset);
   let allVals = [...ourVals];
 
   // Build Onur line
