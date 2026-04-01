@@ -691,6 +691,18 @@ function _renderHistoryInner() {
   $('hist-head').innerHTML = '<th>Time</th><th>Res</th>' +
     wNames.map(n => `<th style="color:${WALLETS[n].color}">${n} #</th><th style="text-align:right;color:${WALLETS[n].color}">PnL</th><th style="text-align:right;color:${WALLETS[n].color}">Cum</th>`).join('');
 
+  // Compute cum_pnl base offset per wallet (rebase from cutoff)
+  const cumBase = {};
+  const firstPid = sorted.length > 0 ? sorted[sorted.length - 1] : null; // earliest period (sorted desc, so last)
+  wNames.forEach(name => {
+    if (firstPid) {
+      const wp = walletPeriods[name][firstPid];
+      cumBase[name] = wp ? (wp.cum_pnl - (wp.pnl || 0)) : 0;
+    } else {
+      cumBase[name] = 0;
+    }
+  });
+
   const dash = '<span style="color:var(--border2)">-</span>';
   const rows = sorted.slice(0, 50).map(pid => {
     const h = resMap[pid];
@@ -705,7 +717,8 @@ function _renderHistoryInner() {
       const wp = walletPeriods[name][pid];
       const n = wp ? wp.n : null;
       const pnl = wp ? wp.pnl : null;
-      const cum = wp ? wp.cum_pnl : null;
+      const rawCum = wp ? wp.cum_pnl : null;
+      const cum = rawCum != null ? rawCum - (cumBase[name] || 0) : null;
       cells += `<td style="color:${WALLETS[name].color}">${n != null ? n : dash}</td>`;
       cells += `<td style="text-align:right">${pnl != null ? `<span class="${pnlClass(pnl)}">${fmtPnl(pnl)}</span>` : dash}</td>`;
       cells += `<td style="text-align:right">${cum != null ? `<span class="${pnlClass(cum)}">${fmtPnl(cum)}</span>` : dash}</td>`;
