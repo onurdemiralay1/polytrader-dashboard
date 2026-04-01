@@ -8,6 +8,7 @@ Run alongside the bot on stop4: python3 taker_dashboard_api.py
 import csv
 import glob
 import json
+import math
 import os
 import time
 import urllib.request
@@ -28,6 +29,7 @@ COMP_CACHE_TTL = 15
 DEFAULT_LATENCY_MS = 350  # full round-trip POST latency
 
 # Polymarket crypto category fee formula (until 2026-03-29)
+LAMBDA = 0.995
 FEE_RATE = 0.25
 FEE_EXPONENT = 2
 
@@ -42,6 +44,9 @@ def calc_fee(price, num_shares):
 COMPETITOR_WALLETS = [
     {"name": "BSO", "addr": "0xe0229E10A858860218B6132F4234602C47bD6603"},
     {"name": "Ours", "addr": "0xac5895eE371f5468e2a122247E90090202F8069a"},
+    {"name": "C3", "addr": "0x965659485992e51f04F532e964e56Ca2c6AEE340"},
+    {"name": "C4", "addr": "0x8Ef6a1cc3fb81a0e2c3eb405a09ce497a23563ee"},
+    {"name": "C5", "addr": "0xeFf1A802Da3ba500e051686Ce10c354e7338A25c"},
 ]
 
 # On-chain balance lookup
@@ -98,15 +103,16 @@ _live_tokens = {}  # pid -> {"up": token_id, "down": token_id}
 
 def _get_current_tokens():
     """Fetch token IDs for current 5-min period."""
-    import requests as req
     pid = int(time.time() // PERIOD_S) * PERIOD_S
     if pid in _live_tokens:
         return pid, _live_tokens[pid]
     url = f"https://gamma-api.polymarket.com/events/slug/btc-updown-5m-{pid}"
-    resp = req.get(url, timeout=5)
-    data = resp.json()["markets"][0]
-    tokens = json.loads(data["clobTokenIds"])
-    outcomes = json.loads(data["outcomes"])
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        data = json.loads(resp.read())
+    mkt = data["markets"][0]
+    tokens = json.loads(mkt["clobTokenIds"])
+    outcomes = json.loads(mkt["outcomes"])
     if outcomes[0] == "Up":
         _live_tokens[pid] = {"up": tokens[0], "down": tokens[1]}
     else:
@@ -115,8 +121,11 @@ def _get_current_tokens():
 
 
 def _poll_live_price():
-    """Background thread: poll CLOB midpoint every 5s for current period chart."""
+    """Background thread: poll CLOB midpoint + Binance BTC every 5s for current period chart."""
     import threading
+    _sigma = [0.0]
+    _last_btc = [0.0]
+
     def loop():
         while True:
             try:
@@ -134,12 +143,49 @@ def _poll_live_price():
                     mid_data = json.loads(resp.read())
                 up_mid = float(mid_data.get("mid", 0))
 
+                # Fetch BTC price from Binance (live, updates every tick)
+                btc_price = None
+                try:
+                    btc_req = urllib.request.Request(
+                        "https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT",
+                        headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(btc_req, timeout=3) as btc_resp:
+                        btc_price = round(float(json.loads(btc_resp.read())["price"]), 2)
+                except Exception:
+                    pass
+
+                # Update sigma (EWMA vol, same as bot)
+                if btc_price and _last_btc[0] > 0:
+                    ret = btc_price - _last_btc[0]
+                    _sigma[0] = math.sqrt(LAMBDA * (_sigma[0] ** 2) + (1 - LAMBDA) * (ret ** 2))
+                if btc_price:
+                    _last_btc[0] = btc_price
+                # Initialize sigma from CSV if needed
+                if _sigma[0] == 0:
+                    _sigma[0] = 5.0  # reasonable default until EWMA warms up
+
                 if up_mid > 0:
+                    # Compute p_up from model
+                    k = None
+                    pid_s = str(pid)
+                    if pid_s in _res_cache and _res_cache[pid_s].get("k"):
+                        k = _res_cache[pid_s]["k"]
+                    p_up_model = None
+                    if btc_price and k and _sigma[0] > 0 and remaining > 0:
+                        vol = _sigma[0] * math.sqrt(remaining) / math.sqrt(5)
+                        if vol > 0:
+                            d2 = (btc_price - k) / vol
+                            # Normal CDF approximation (no scipy needed)
+                            p_up_model = round(0.5 * (1 + math.erf(d2 / math.sqrt(2))), 4)
+
                     snap = {
                         "ts": int(time.time() * 1000),
                         "remaining": round(remaining, 1),
+                        "btc_raw": btc_price,
                         "up_ask": up_mid,
                         "down_ask": round(1 - up_mid, 4),
+                        "sigma": round(_sigma[0], 3),
+                        "p_up": p_up_model,
                     }
                     if pid not in _live_snaps:
                         _live_snaps[pid] = []
@@ -159,8 +205,9 @@ def _poll_live_price():
                     if old_pid < pid - PERIOD_S:
                         del _live_snaps[old_pid]
 
-            except Exception:
-                pass
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
             time.sleep(5)
 
     t = threading.Thread(target=loop, daemon=True)
@@ -545,8 +592,8 @@ def build_state(latency_ms=DEFAULT_LATENCY_MS):
         "period_time": datetime.fromtimestamp(current_pid, tz=timezone.utc).strftime("%H:%M") if current_pid else "",
         "remaining": latest.get("remaining", remaining_now),
         "mode": "LIVE",
-        "btc_raw": latest.get("btc_raw"),
-        "btc_ema": latest.get("btc_ema"),
+        "btc_raw": latest.get("btc_raw") or latest.get("btc_price"),
+        "btc_ema": latest.get("btc_ema") or latest.get("btc_raw"),
         "price_to_hit": latest.get("price_to_hit") or live_k or period_k.get(current_pid),
         "sigma": latest.get("sigma"),
         "p_up": latest.get("p_up") or latest.get("up_ask"),
@@ -588,13 +635,16 @@ def build_competitors():
         try:
             all_data = []
             for offset in range(0, 4000, 1000):
-                url = f"https://data-api.polymarket.com/activity?user={w['addr']}&limit=1000&offset={offset}"
-                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-                resp = urllib.request.urlopen(req, timeout=15)
-                page = json.loads(resp.read())
-                all_data.extend(page)
-                if len(page) < 1000:
-                    break
+                try:
+                    url = f"https://data-api.polymarket.com/activity?user={w['addr']}&limit=1000&offset={offset}"
+                    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                    resp = urllib.request.urlopen(req, timeout=15)
+                    page = json.loads(resp.read())
+                    all_data.extend(page)
+                    if len(page) < 1000:
+                        break
+                except Exception:
+                    break  # keep what we have
             data = all_data
         except Exception as e:
             result.append({"name": w["name"], "addr": w["addr"][:10] + "...", "error": str(e)})

@@ -168,11 +168,8 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',mo
   </div>
   <div class="ptable-scroll">
     <table class="ptable">
-      <thead><tr>
+      <thead><tr id="hist-head">
         <th>Time</th><th>Res</th>
-        <th style="color:var(--blue)">Our #</th><th style="text-align:right;color:var(--blue)">Our PnL</th><th style="text-align:right;color:var(--blue)">Our Cum</th>
-        <th style="color:var(--cyan)">BSO #</th><th style="text-align:right;color:var(--cyan)">BSO PnL</th><th style="text-align:right;color:var(--cyan)">BSO Cum</th>
-        <th style="color:var(--orange)">C3 #</th><th style="text-align:right;color:var(--orange)">C3 PnL</th><th style="text-align:right;color:var(--orange)">C3 Cum</th>
       </tr></thead>
       <tbody id="hist-body"></tbody>
     </table>
@@ -182,11 +179,18 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',mo
 <script>
 const MAX_POS = 100;
 let state = null;
-let compData = null; // BSO wallet object
-let oursData = null; // Our wallet object
-let comp3Data = null; // Comp3 wallet object
 let showBtc = true;
 let showUp = false;
+
+// Dynamic wallet tracking
+const WALLETS = {
+  Ours: {color:'var(--blue)', marker:'triangle', visible:true},
+  BSO:  {color:'var(--cyan)', marker:'circle', visible:true},
+  C3:   {color:'var(--orange)', marker:'diamond', visible:true},
+  C4:   {color:'var(--pink)', marker:'square', visible:true},
+  C5:   {color:'#a78bfa', marker:'cross', visible:true},
+};
+let walletData = {}; // name -> API data
 let apiUrl = localStorage.getItem('taker5m_api') || 'http://54.194.33.93:8765';
 document.getElementById('api-url').value = apiUrl;
 
@@ -213,12 +217,12 @@ async function fetchCompetitors() {
   try {
     const r = await fetch(apiUrl + '/competitors');
     const arr = await r.json();
-    compData = arr.find(w => w.name === 'BSO' && !w.error) || null;
-    oursData = arr.find(w => w.name === 'Ours' && !w.error) || null;
-    comp3Data = arr.find(w => w.name === 'Comp3' && !w.error) || null;
+    walletData = {};
+    arr.forEach(w => { if (!w.error) walletData[w.name] = w; });
     render();
   } catch(e) { /* silent */ }
 }
+function getWallet(name) { return walletData[name] || null; }
 
 function $(id) { return document.getElementById(id); }
 function fmt(n, d=2) { return n != null ? n.toFixed(d) : '?'; }
@@ -237,7 +241,8 @@ function getOnurPeriods() {
 function render() {
   if (!state) return;
   const lat = state.latency_ms || 0;
-  $('mode-badge').textContent = oursData && oursData.n_trades > 0 ? 'LIVE' : (lat > 0 ? `PAPER +${lat}ms` : 'PAPER');
+  const ours = getWallet('Ours');
+  $('mode-badge').textContent = ours && ours.n_trades > 0 ? 'LIVE' : (lat > 0 ? `PAPER +${lat}ms` : 'PAPER');
   renderH2H();
   renderCurrentPeriod();
   renderCumChart();
@@ -247,8 +252,8 @@ function render() {
 function renderH2H() {
   const strip = $('h2h-strip');
 
-  function walletCard(w, color, colorVar, tagBg) {
-    if (!w || !w.name) return `<div class="h2h-card" style="--c:${colorVar}"><div class="name">Loading...</div><div class="empty" style="padding:10px">Fetching wallet data...</div></div>`;
+  function walletCard(w, name, colorVar, tagBg) {
+    if (!w || !w.name) return `<div class="h2h-card" style="--c:${colorVar}"><div class="name">${name}</div><div class="empty" style="padding:10px">Loading...</div></div>`;
     const res = w.resolved || 0;
     const pnlPer = res > 0 ? w.total_pnl / res : 0;
     const cash = w.cash != null ? `$${w.cash.toLocaleString()}` : '?';
@@ -270,11 +275,13 @@ function renderH2H() {
     </div>`;
   }
 
-  const ourCard = walletCard(oursData, 'blue', 'var(--blue)', 'rgba(96,165,250,.15)');
-  const onurCard = walletCard(compData, 'cyan', 'var(--cyan)', 'rgba(34,211,238,.12)');
-  const comp3Card = walletCard(comp3Data, 'orange', 'var(--orange)', 'rgba(251,146,60,.12)');
-
-  strip.innerHTML = ourCard + onurCard + comp3Card;
+  const cards = Object.entries(WALLETS).map(([name, cfg]) => {
+    const w = getWallet(name);
+    return walletCard(w, name, cfg.color, `${cfg.color.replace('var(--','').replace(')','')}`);
+  }).join('');
+  strip.innerHTML = cards;
+  // Update grid columns based on wallet count
+  strip.style.gridTemplateColumns = `repeat(${Object.keys(WALLETS).length}, 1fr)`;
 }
 
 function renderCurrentPeriod() {
@@ -293,32 +300,19 @@ function renderCurrentPeriod() {
   const secs = Math.floor(rem % 60);
   $('timer').textContent = `${mins}:${String(secs).padStart(2,'0')} remaining | K = $${K ? K.toLocaleString() : '?'}`;
 
-  // Get our trades from wallet API
-  let trades = [];
-  if (oursData && oursData.periods) {
-    const ourP = oursData.periods[String(state.period_ts)];
-    if (ourP && ourP.trades) trades = ourP.trades;
-  }
-
-  // Get BSO's trades for current period
-  let bsoTrades = [];
-  if (compData && compData.periods) {
-    const op = compData.periods[String(state.period_ts)];
-    if (op && op.trades) bsoTrades = op.trades;
-  }
-
-  // Get Comp3's trades for current period
-  let c3Trades = [];
-  if (comp3Data && comp3Data.periods) {
-    const c3p = comp3Data.periods[String(state.period_ts)];
-    if (c3p && c3p.trades) c3Trades = c3p.trades;
-  }
+  // Get trades for all wallets
+  const allWalletTrades = {};
+  Object.keys(WALLETS).forEach(name => {
+    const w = getWallet(name);
+    const p = w && w.periods ? w.periods[String(state.period_ts)] : null;
+    allWalletTrades[name] = (p && p.trades) ? p.trades : [];
+  });
 
   // Auto-enable UP chart if no BTC data available
   const hasBtc = snaps.some(s => s.btc_raw != null);
   const chartBtc = hasBtc ? showBtc : false;
   const chartUp = hasBtc ? showUp : true;
-  const chart = buildChart(snaps, trades, bsoTrades, c3Trades, K, chartBtc, chartUp);
+  const chart = buildChart(snaps, allWalletTrades, K, chartBtc, chartUp);
 
   const upPos = cp ? cp.up_pos : 0;
   const dnPos = cp ? cp.down_pos : 0;
@@ -387,11 +381,15 @@ function renderCurrentPeriod() {
   const upAskNow = state.up_best_ask;
   const dnAskNow = state.down_best_ask;
   const posCmpHtml = `<div class="pos-cmp">
-    ${posCol('Ours', 'var(--blue)', trades, 'shares', upAskNow, dnAskNow)}
-    ${posCol('BSO', 'var(--cyan)', bsoTrades, 'shares', upAskNow, dnAskNow)}
-    ${posCol('C3', 'var(--orange)', c3Trades, 'shares', upAskNow, dnAskNow)}
+    ${Object.entries(WALLETS).filter(([n,c]) => c.visible).map(([name, cfg]) =>
+      posCol(name, cfg.color, allWalletTrades[name] || [], 'shares', upAskNow, dnAskNow)
+    ).join('')}
   </div>`;
+  // Update pos-cmp grid columns
+  const visibleCount = Object.values(WALLETS).filter(c => c.visible).length;
+  setTimeout(() => { const el = document.querySelector('.pos-cmp'); if(el) el.style.gridTemplateColumns = `repeat(${visibleCount}, 1fr)`; }, 0);
 
+  const trades = allWalletTrades['Ours'] || [];
   let tradesHtml = '';
   if (trades.length > 0) {
     const rows = trades.slice(-15).reverse().map(t => {
@@ -419,12 +417,7 @@ function renderCurrentPeriod() {
     <div style="display:flex;gap:12px;font-size:9px;color:var(--dim);margin-bottom:6px;align-items:center">
       <span class="tog ${showBtc?'on':''}" style="--c:var(--blue)" onclick="showBtc=!showBtc;this.classList.toggle('on');renderCurrentPeriod()"><span class="pip"></span>BTC</span>
       <span class="tog ${showUp?'on':''}" style="--c:var(--green)" onclick="showUp=!showUp;this.classList.toggle('on');renderCurrentPeriod()"><span class="pip"></span>UP ask</span>
-      <span style="margin-left:6px"><span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:7px solid var(--green);margin-right:3px;vertical-align:middle"></span>Our UP</span>
-      <span><span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--red);margin-right:3px;vertical-align:middle"></span>Our DN</span>
-      <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--cyan);opacity:.6;margin-right:3px;vertical-align:middle"></span>BSO UP</span>
-      <span><span style="display:inline-block;width:7px;height:7px;border:1.5px solid var(--cyan);border-radius:50%;opacity:.6;margin-right:3px;vertical-align:middle"></span>BSO DN</span>
-      <span><span style="display:inline-block;width:7px;height:7px;background:var(--orange);opacity:.6;margin-right:3px;vertical-align:middle;transform:rotate(45deg)"></span>C3 UP</span>
-      <span><span style="display:inline-block;width:7px;height:7px;border:1.5px solid var(--orange);opacity:.6;margin-right:3px;vertical-align:middle;transform:rotate(45deg)"></span>C3 DN</span>
+      ${Object.entries(WALLETS).map(([name, cfg]) => `<span class="tog ${cfg.visible?'on':''}" style="--c:${cfg.color};margin-left:4px" onclick="WALLETS['${name}'].visible=!WALLETS['${name}'].visible;this.classList.toggle('on');renderCurrentPeriod()"><span class="pip"></span>${name}</span>`).join('')}
     </div>
     <div class="chart-wrap">${chart}</div>
     ${posCmpHtml}
@@ -440,7 +433,7 @@ function renderCurrentPeriod() {
   `;
 }
 
-function buildChart(snaps, ourTrades, onurTrades, c3Trades, K, btcOn, upOn) {
+function buildChart(snaps, allWalletTrades, K, btcOn, upOn) {
   if (snaps.length < 2) return '<div class="empty" style="padding:40px 0">Not enough data</div>';
 
   const W = 700, H = 180, PAD = {t:12, b:22, l:55, r: upOn ? 30 : 12};
@@ -529,63 +522,35 @@ function buildChart(snaps, ourTrades, onurTrades, c3Trades, K, btcOn, upOn) {
     return toY(s.btc_raw); // fallback
   }
 
-  // Our markers (triangles) — placed at fill time (signal + latency)
-  let markers = '';
-  ourTrades.forEach(t => {
-    const rem = t.fill_remaining != null ? t.fill_remaining : t.remaining;
-    const x = toX(rem);
-    const y = markerY(rem);
-    const isUp = t.side === 'UP';
-    const color = isUp ? '#4ade80' : '#f87171';
-    const dy = isUp ? -10 : 10;
-    const markerTop = isUp ? y + dy : y + dy - 7;
-    const labelY = markerTop - 4;
-    const price = t.ask != null ? t.ask.toFixed(2) : '';
-    let shape;
-    if (isUp) {
-      shape = `<polygon points="${x},${y+dy} ${x-4},${y+dy+7} ${x+4},${y+dy+7}" fill="${color}" opacity="0.8"/>`;
-    } else {
-      shape = `<polygon points="${x},${y+dy} ${x-4},${y+dy-7} ${x+4},${y+dy-7}" fill="${color}" opacity="0.8"/>`;
-    }
-    markers += `<g class="mk">${shape}<rect x="${x-14}" y="${labelY-8}" width="28" height="11" rx="2" fill="var(--surface)" stroke="${color}" stroke-width="0.5" opacity="0.9" class="mk-bg"/><text x="${x}" y="${labelY}" text-anchor="middle" fill="${color}" font-size="8" font-weight="600" class="mk-lbl">${price}</text><rect x="${x-6}" y="${y+dy-8}" width="12" height="16" fill="transparent" class="mk-hit"/></g>`;
-  });
-
-  // Onur markers (circles — filled for UP, hollow for DOWN)
-  let onurMarkers = '';
-  onurTrades.forEach(t => {
-    const x = toX(t.remaining);
-    const y = markerY(t.remaining);
-    const isUp = t.side === 'UP';
-    const dy = isUp ? -16 : 16;
-    const markerTop = y + dy - (isUp ? 0 : 3);
-    const labelY = markerTop - 6;
-    const price = t.ask != null ? t.ask.toFixed(2) : '';
-    let shape;
-    if (isUp) {
-      shape = `<circle cx="${x}" cy="${y+dy}" r="3" fill="#22d3ee" opacity="0.5"/>`;
-    } else {
-      shape = `<circle cx="${x}" cy="${y+dy}" r="3" fill="none" stroke="#22d3ee" stroke-width="1.5" opacity="0.5"/>`;
-    }
-    onurMarkers += `<g class="mk">${shape}<rect x="${x-14}" y="${labelY-8}" width="28" height="11" rx="2" fill="var(--surface)" stroke="#22d3ee" stroke-width="0.5" opacity="0.9" class="mk-bg"/><text x="${x}" y="${labelY}" text-anchor="middle" fill="#22d3ee" font-size="8" font-weight="600" class="mk-lbl">${price}</text><rect x="${x-5}" y="${y+dy-6}" width="10" height="12" fill="transparent" class="mk-hit"/></g>`;
-  });
-
-  // Comp3 markers (diamonds — filled for UP, hollow for DOWN)
-  let c3Markers = '';
-  (c3Trades || []).forEach(t => {
-    const x = toX(t.remaining);
-    const y = markerY(t.remaining);
-    const isUp = t.side === 'UP';
-    const dy = isUp ? -22 : 22;
-    const markerTop = y + dy - 4;
-    const labelY = markerTop - 4;
-    const price = t.ask != null ? t.ask.toFixed(2) : '';
-    let shape;
-    if (isUp) {
-      shape = `<rect x="${x-2.5}" y="${y+dy-2.5}" width="5" height="5" fill="#fb923c" opacity="0.5" transform="rotate(45,${x},${y+dy})"/>`;
-    } else {
-      shape = `<rect x="${x-2.5}" y="${y+dy-2.5}" width="5" height="5" fill="none" stroke="#fb923c" stroke-width="1.5" opacity="0.5" transform="rotate(45,${x},${y+dy})"/>`;
-    }
-    c3Markers += `<g class="mk">${shape}<rect x="${x-14}" y="${labelY-8}" width="28" height="11" rx="2" fill="var(--surface)" stroke="#fb923c" stroke-width="0.5" opacity="0.9" class="mk-bg"/><text x="${x}" y="${labelY}" text-anchor="middle" fill="#fb923c" font-size="8" font-weight="600" class="mk-lbl">${price}</text><rect x="${x-5}" y="${y+dy-6}" width="10" height="12" fill="transparent" class="mk-hit"/></g>`;
+  // Dynamic wallet markers
+  const dyOffsets = [-10, -16, -22, -28, -34]; // vertical offsets per wallet
+  let allMarkersSvg = '';
+  const colorMap = {'var(--blue)':'#60a5fa','var(--cyan)':'#22d3ee','var(--orange)':'#fb923c','var(--pink)':'#f472b6'};
+  Object.entries(WALLETS).forEach(([name, cfg], idx) => {
+    if (!cfg.visible) return;
+    const trades = allWalletTrades[name] || [];
+    const hexColor = colorMap[cfg.color] || cfg.color;
+    const baseOff = dyOffsets[idx % dyOffsets.length];
+    trades.forEach(t => {
+      const rem = t.fill_remaining != null ? t.fill_remaining : t.remaining;
+      const x = toX(rem);
+      const y = markerY(rem);
+      const isUp = t.side === 'UP';
+      const dy = isUp ? baseOff : -baseOff;
+      const labelY = (isUp ? y + dy : y + dy - 7) - 4;
+      const price = t.ask != null ? t.ask.toFixed(2) : '';
+      let shape;
+      if (idx === 0) { // triangles for first wallet
+        shape = isUp
+          ? `<polygon points="${x},${y+dy} ${x-4},${y+dy+7} ${x+4},${y+dy+7}" fill="${hexColor}" opacity="0.7"/>`
+          : `<polygon points="${x},${y+dy} ${x-4},${y+dy-7} ${x+4},${y+dy-7}" fill="${hexColor}" opacity="0.7"/>`;
+      } else { // circles for others
+        shape = isUp
+          ? `<circle cx="${x}" cy="${y+dy}" r="3" fill="${hexColor}" opacity="0.5"/>`
+          : `<circle cx="${x}" cy="${y+dy}" r="3" fill="none" stroke="${hexColor}" stroke-width="1.5" opacity="0.5"/>`;
+      }
+      allMarkersSvg += `<g class="mk">${shape}<rect x="${x-14}" y="${labelY-8}" width="28" height="11" rx="2" fill="var(--surface)" stroke="${hexColor}" stroke-width="0.5" opacity="0.9" class="mk-bg"/><text x="${x}" y="${labelY}" text-anchor="middle" fill="${hexColor}" font-size="8" font-weight="600" class="mk-lbl">${price}</text><rect x="${x-5}" y="${y+dy-6}" width="10" height="12" fill="transparent" class="mk-hit"/></g>`;
+    });
   });
 
   // Current price dot(s)
@@ -615,9 +580,7 @@ function buildChart(snaps, ourTrades, onurTrades, c3Trades, K, btcOn, upOn) {
     ${kLine}
     ${upLine}${upAxis}
     ${btcLine}
-    ${onurMarkers}
-    ${c3Markers}
-    ${markers}
+    ${allMarkersSvg}
     ${curDot}
   </svg>`;
 }
@@ -694,65 +657,49 @@ function renderCumChart() {
 
 function renderHistory() {
   const hist = state.history || [];
-  const bsoPeriods = compData && compData.periods ? compData.periods : {};
-  const ourPeriods = oursData && oursData.periods ? oursData.periods : {};
-  const c3Periods = comp3Data && comp3Data.periods ? comp3Data.periods : {};
-
-  // Build fast lookup for resolutions
   const resMap = {};
   hist.forEach(h => { resMap[String(h.period_ts)] = h; });
 
+  // Collect all wallet periods
+  const walletPeriods = {};
+  Object.keys(WALLETS).forEach(name => {
+    const w = getWallet(name);
+    walletPeriods[name] = w && w.periods ? w.periods : {};
+  });
+
   // Merge all period timestamps
-  const allPids = new Set([
-    ...Object.keys(resMap),
-    ...Object.keys(bsoPeriods),
-    ...Object.keys(ourPeriods),
-    ...Object.keys(c3Periods),
-  ]);
+  const allPids = new Set(Object.keys(resMap));
+  Object.values(walletPeriods).forEach(p => Object.keys(p).forEach(k => allPids.add(k)));
   const sorted = [...allPids].sort((a,b) => Number(b) - Number(a));
 
   const resolvedCount = sorted.filter(p => resMap[p] && resMap[p].resolution).length;
   $('hist-sub').textContent = `${resolvedCount} resolved periods`;
 
+  // Dynamic headers
+  const wNames = Object.keys(WALLETS);
+  $('hist-head').innerHTML = '<th>Time</th><th>Res</th>' +
+    wNames.map(n => `<th style="color:${WALLETS[n].color}">${n} #</th><th style="text-align:right;color:${WALLETS[n].color}">PnL</th><th style="text-align:right;color:${WALLETS[n].color}">Cum</th>`).join('');
+
+  const dash = '<span style="color:var(--border2)">-</span>';
   const rows = sorted.slice(0, 200).map(pid => {
     const h = resMap[pid];
     const res = h ? h.resolution : null;
     const timeStr = h ? h.time : new Date(Number(pid) * 1000).toISOString().substr(11, 5);
-    const isPending = !res;
     const resColor = res === 'Up' ? 'var(--green)' : (res === 'Down' ? 'var(--red)' : 'var(--dim)');
+    const firstW = walletPeriods[wNames[0]][pid];
+    const cls = !res ? 'pending' : ((firstW && firstW.pnl > 0) ? 'winner' : 'loser');
 
-    const op = ourPeriods[pid];
-    const uPnl = op ? op.pnl : null;
-    const uCum = op ? op.cum_pnl : null;
-    const uN = op ? op.n : null;
-
-    const bp = bsoPeriods[pid];
-    const bPnl = bp ? bp.pnl : null;
-    const bCum = bp ? bp.cum_pnl : null;
-    const bN = bp ? bp.n : null;
-
-    const c3p = c3Periods[pid];
-    const c3Pnl = c3p ? c3p.pnl : null;
-    const c3Cum = c3p ? c3p.cum_pnl : null;
-    const c3N = c3p ? c3p.n : null;
-
-    const cls = isPending ? 'pending' : ((uPnl != null && uPnl > 0) ? 'winner' : 'loser');
-
-    const dash = '<span style="color:var(--border2)">-</span>';
-
-    return `<tr class="${cls}">
-      <td>${timeStr}</td>
-      <td style="color:${resColor};font-weight:600">${res || 'LIVE'}</td>
-      <td style="color:var(--blue)">${uN != null ? uN : dash}</td>
-      <td style="text-align:right">${uPnl != null ? `<span class="${pnlClass(uPnl)}">${fmtPnl(uPnl)}</span>` : dash}</td>
-      <td style="text-align:right">${uCum != null ? `<span class="${pnlClass(uCum)}">${fmtPnl(uCum)}</span>` : dash}</td>
-      <td style="color:var(--cyan)">${bN != null ? bN : dash}</td>
-      <td style="text-align:right">${bPnl != null ? `<span class="${pnlClass(bPnl)}">${fmtPnl(bPnl)}</span>` : dash}</td>
-      <td style="text-align:right">${bCum != null ? `<span class="${pnlClass(bCum)}">${fmtPnl(bCum)}</span>` : dash}</td>
-      <td style="color:var(--orange)">${c3N != null ? c3N : dash}</td>
-      <td style="text-align:right">${c3Pnl != null ? `<span class="${pnlClass(c3Pnl)}">${fmtPnl(c3Pnl)}</span>` : dash}</td>
-      <td style="text-align:right">${c3Cum != null ? `<span class="${pnlClass(c3Cum)}">${fmtPnl(c3Cum)}</span>` : dash}</td>
-    </tr>`;
+    let cells = `<td>${timeStr}</td><td style="color:${resColor};font-weight:600">${res || 'LIVE'}</td>`;
+    wNames.forEach(name => {
+      const wp = walletPeriods[name][pid];
+      const n = wp ? wp.n : null;
+      const pnl = wp ? wp.pnl : null;
+      const cum = wp ? wp.cum_pnl : null;
+      cells += `<td style="color:${WALLETS[name].color}">${n != null ? n : dash}</td>`;
+      cells += `<td style="text-align:right">${pnl != null ? `<span class="${pnlClass(pnl)}">${fmtPnl(pnl)}</span>` : dash}</td>`;
+      cells += `<td style="text-align:right">${cum != null ? `<span class="${pnlClass(cum)}">${fmtPnl(cum)}</span>` : dash}</td>`;
+    });
+    return `<tr class="${cls}">${cells}</tr>`;
   }).join('');
 
   $('hist-body').innerHTML = rows;
