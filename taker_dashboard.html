@@ -262,8 +262,12 @@ function renderH2H() {
       <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px">
         <span class="${pnlClass(w.total_pnl)}" style="font-size:18px;font-weight:700">${fmtPnl(w.total_pnl)}</span>
         <span style="font-size:10px;color:var(--dim)">${w.win_rate}% WR</span>
-        <span style="font-size:10px;color:var(--dim)">${w.n_trades} trades</span>
-        <span style="font-size:10px;color:var(--dim)" class="${pnlClass(pnlPer)}">${fmtPnl(pnlPer)}/p</span>
+        <span style="font-size:10px;color:var(--dim)">${w.n_trades} t</span>
+        <span style="font-size:10px" class="${pnlClass(pnlPer)}">${fmtPnl(pnlPer)}/p</span>
+      </div>
+      <div style="display:flex;gap:12px;font-size:9px;color:var(--dim);margin-top:4px">
+        <span>Cash <b style="color:var(--text)">${w.cash != null ? '$'+Math.round(w.cash).toLocaleString() : '?'}</b></span>
+        <span>Pos <b style="color:var(--text)">${w.portfolio_value != null ? '$'+Math.round(w.portfolio_value).toLocaleString() : '?'}</b></span>
       </div>
     </div>`;
   }
