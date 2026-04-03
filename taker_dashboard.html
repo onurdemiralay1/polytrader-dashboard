@@ -148,7 +148,7 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',mo
 <div class="h2h-strip" id="h2h-strip"></div>
 
 <!-- Current period -->
-<div class="cur-section">
+<div class="cur-section" id="cur-section">
   <div class="cur-hdr">
     <div class="title">Current Period <span class="live" id="live-badge">LIVE</span></div>
     <div class="timer" id="timer">--:-- remaining</div>
@@ -202,6 +202,8 @@ function switchSymbol(sym) {
   currentSymbol = sym;
   document.getElementById('btn-btc').style.fontWeight = sym === 'btc' ? '700' : '400';
   document.getElementById('btn-eth').style.fontWeight = sym === 'eth' ? '700' : '400';
+  document.getElementById('cur-section').style.display = sym === 'btc' ? '' : 'none';
+  document.getElementById('cum-chart-wrap').style.display = sym === 'btc' ? '' : 'none';
   _lastCompJson = '';
   walletData = {};
   fetchCompetitors();
