@@ -96,17 +96,20 @@ _cache = {"data": None, "ts": 0}
 _comp_cache = {"data": None, "ts": 0}
 
 # Live price poller — fetches UP midpoint for current period chart
-_live_snaps = {}  # pid -> list of {ts, remaining, up_ask, ...}
-_live_price_pid = [0]  # current period being tracked
-_live_tokens = {}  # pid -> {"up": token_id, "down": token_id}
+_live_snaps = {}  # symbol -> {pid -> list of snapshots}
+_live_price_pid = {}  # symbol -> pid
+_live_tokens = {}  # (symbol, pid) -> {"up": token_id, "down": token_id}
+
+BINANCE_SYMBOLS = {"btc": "BTCUSDT", "eth": "ETHUSDT"}
 
 
-def _get_current_tokens():
+def _get_current_tokens(symbol="btc"):
     """Fetch token IDs for current 5-min period."""
     pid = int(time.time() // PERIOD_S) * PERIOD_S
-    if pid in _live_tokens:
-        return pid, _live_tokens[pid]
-    url = f"https://gamma-api.polymarket.com/events/slug/btc-updown-5m-{pid}"
+    key = (symbol, pid)
+    if key in _live_tokens:
+        return pid, _live_tokens[key]
+    url = f"https://gamma-api.polymarket.com/events/slug/{symbol}-updown-5m-{pid}"
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=5) as resp:
         data = json.loads(resp.read())
@@ -114,100 +117,84 @@ def _get_current_tokens():
     tokens = json.loads(mkt["clobTokenIds"])
     outcomes = json.loads(mkt["outcomes"])
     if outcomes[0] == "Up":
-        _live_tokens[pid] = {"up": tokens[0], "down": tokens[1]}
+        _live_tokens[key] = {"up": tokens[0], "down": tokens[1]}
     else:
-        _live_tokens[pid] = {"up": tokens[1], "down": tokens[0]}
-    return pid, _live_tokens[pid]
+        _live_tokens[key] = {"up": tokens[1], "down": tokens[0]}
+    return pid, _live_tokens[key]
 
 
 def _poll_live_price():
-    """Background thread: poll CLOB midpoint + Binance BTC every 5s for current period chart."""
+    """Background thread: poll CLOB midpoint + Binance price every 5s for both BTC and ETH."""
     import threading
-    _sigma = [0.0]
-    _last_btc = [0.0]
+    _sigma = {}  # symbol -> sigma
+    _last_price = {}  # symbol -> last price
+
+    def poll_symbol(symbol):
+        try:
+            pid, tokens = _get_current_tokens(symbol)
+            if symbol not in _live_snaps:
+                _live_snaps[symbol] = {}
+            if pid != _live_price_pid.get(symbol):
+                _live_price_pid[symbol] = pid
+                _live_snaps[symbol][pid] = []
+
+            remaining = max(0, (pid + PERIOD_S) - time.time())
+
+            # Fetch UP midpoint
+            url = f"https://clob.polymarket.com/midpoint?token_id={tokens['up']}"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                mid_data = json.loads(resp.read())
+            up_mid = float(mid_data.get("mid", 0))
+
+            # Fetch price from Binance
+            bin_symbol = BINANCE_SYMBOLS.get(symbol, "BTCUSDT")
+            asset_price = None
+            try:
+                btc_req = urllib.request.Request(
+                    f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={bin_symbol}",
+                    headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(btc_req, timeout=3) as btc_resp:
+                    asset_price = round(float(json.loads(btc_resp.read())["price"]), 2)
+            except Exception:
+                pass
+
+            # Update sigma
+            if asset_price and _last_price.get(symbol, 0) > 0:
+                ret = asset_price - _last_price[symbol]
+                old_s = _sigma.get(symbol, 5.0)
+                _sigma[symbol] = math.sqrt(LAMBDA * (old_s ** 2) + (1 - LAMBDA) * (ret ** 2))
+            if asset_price:
+                _last_price[symbol] = asset_price
+            if symbol not in _sigma:
+                _sigma[symbol] = 5.0
+
+            if up_mid > 0:
+                snap = {
+                    "ts": int(time.time() * 1000),
+                    "remaining": round(remaining, 1),
+                    "btc_raw": asset_price,
+                    "up_ask": up_mid,
+                    "down_ask": round(1 - up_mid, 4),
+                    "sigma": round(_sigma.get(symbol, 5.0), 3),
+                    "p_up": None,
+                }
+                _live_snaps[symbol].setdefault(pid, []).append(snap)
+
+            # Cleanup old periods
+            if symbol in _live_snaps:
+                for old_pid in list(_live_snaps[symbol].keys()):
+                    if old_pid < pid - PERIOD_S:
+                        del _live_snaps[symbol][old_pid]
+
+        except Exception:
+            import traceback
+            traceback.print_exc()
 
     def loop():
         while True:
-            try:
-                pid, tokens = _get_current_tokens()
-                if pid != _live_price_pid[0]:
-                    _live_price_pid[0] = pid
-                    _live_snaps[pid] = []
-
-                remaining = max(0, (pid + PERIOD_S) - time.time())
-
-                # Fetch UP midpoint
-                url = f"https://clob.polymarket.com/midpoint?token_id={tokens['up']}"
-                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    mid_data = json.loads(resp.read())
-                up_mid = float(mid_data.get("mid", 0))
-
-                # Fetch BTC price from Binance (live, updates every tick)
-                btc_price = None
-                try:
-                    btc_req = urllib.request.Request(
-                        "https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT",
-                        headers={"User-Agent": "Mozilla/5.0"})
-                    with urllib.request.urlopen(btc_req, timeout=3) as btc_resp:
-                        btc_price = round(float(json.loads(btc_resp.read())["price"]), 2)
-                except Exception:
-                    pass
-
-                # Update sigma (EWMA vol, same as bot)
-                if btc_price and _last_btc[0] > 0:
-                    ret = btc_price - _last_btc[0]
-                    _sigma[0] = math.sqrt(LAMBDA * (_sigma[0] ** 2) + (1 - LAMBDA) * (ret ** 2))
-                if btc_price:
-                    _last_btc[0] = btc_price
-                # Initialize sigma from CSV if needed
-                if _sigma[0] == 0:
-                    _sigma[0] = 5.0  # reasonable default until EWMA warms up
-
-                if up_mid > 0:
-                    # Compute p_up from model
-                    k = None
-                    pid_s = str(pid)
-                    if pid_s in _res_cache and _res_cache[pid_s].get("k"):
-                        k = _res_cache[pid_s]["k"]
-                    p_up_model = None
-                    if btc_price and k and _sigma[0] > 0 and remaining > 0:
-                        vol = _sigma[0] * math.sqrt(remaining) / math.sqrt(5)
-                        if vol > 0:
-                            d2 = (btc_price - k) / vol
-                            # Normal CDF approximation (no scipy needed)
-                            p_up_model = round(0.5 * (1 + math.erf(d2 / math.sqrt(2))), 4)
-
-                    snap = {
-                        "ts": int(time.time() * 1000),
-                        "remaining": round(remaining, 1),
-                        "btc_raw": btc_price,
-                        "up_ask": up_mid,
-                        "down_ask": round(1 - up_mid, 4),
-                        "sigma": round(_sigma[0], 3),
-                        "p_up": p_up_model,
-                    }
-                    if pid not in _live_snaps:
-                        _live_snaps[pid] = []
-                    _live_snaps[pid].append(snap)
-
-                    # Also fetch price_to_hit for K line
-                    if not any(s.get("price_to_hit") for s in _live_snaps[pid]):
-                        try:
-                            pth_data = _fetch_period_price(pid)
-                            if pth_data.get("openPrice"):
-                                snap["price_to_hit"] = pth_data["openPrice"]
-                        except Exception:
-                            pass
-
-                # Cleanup old periods
-                for old_pid in list(_live_snaps.keys()):
-                    if old_pid < pid - PERIOD_S:
-                        del _live_snaps[old_pid]
-
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
+            for sym in ["btc", "eth"]:
+                poll_symbol(sym)
             time.sleep(5)
 
     t = threading.Thread(target=loop, daemon=True)
@@ -451,7 +438,7 @@ def simulate_period(sigs, snapshots=None, latency_ms=DEFAULT_LATENCY_MS):
     return trades, round(total_fees, 4)
 
 
-def build_state(latency_ms=DEFAULT_LATENCY_MS):
+def build_state(latency_ms=DEFAULT_LATENCY_MS, symbol="btc"):
     now = time.time()
     cache_key = latency_ms
     if _cache.get("key") == cache_key and _cache["data"] and now - _cache["ts"] < CACHE_TTL:
@@ -570,8 +557,9 @@ def build_state(latency_ms=DEFAULT_LATENCY_MS):
                 pass
 
     # Fallback to live price poller if no bot snapshots
-    if not current_snaps and current_pid in _live_snaps:
-        current_snaps = _live_snaps[current_pid]
+    sym_snaps = _live_snaps.get(symbol, {})
+    if not current_snaps and current_pid in sym_snaps:
+        current_snaps = sym_snaps[current_pid]
 
     # Extract price_to_hit from live snaps
     live_k = None
@@ -771,7 +759,8 @@ class Handler(BaseHTTPRequestHandler):
         params = parse_qs(parsed.query)
         if path in ("/", "/state"):
             latency = int(params.get("latency", [DEFAULT_LATENCY_MS])[0])
-            self._send_json(build_state(latency_ms=latency))
+            symbol = params.get("symbol", ["btc"])[0].lower()
+            self._send_json(build_state(latency_ms=latency, symbol=symbol))
         elif path == "/competitors":
             symbol = params.get("symbol", ["btc"])[0].lower()
             self._send_json(build_competitors(symbol=symbol))

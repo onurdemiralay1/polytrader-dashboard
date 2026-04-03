@@ -202,8 +202,8 @@ function switchSymbol(sym) {
   currentSymbol = sym;
   document.getElementById('btn-btc').style.fontWeight = sym === 'btc' ? '700' : '400';
   document.getElementById('btn-eth').style.fontWeight = sym === 'eth' ? '700' : '400';
-  document.getElementById('cur-section').style.display = sym === 'btc' ? '' : 'none';
-  document.getElementById('cum-chart-wrap').style.display = sym === 'btc' ? '' : 'none';
+  document.getElementById('cur-section').style.display = '';
+  document.getElementById('cum-chart-wrap').style.display = '';
   _lastCompJson = '';
   walletData = {};
   fetchCompetitors();
@@ -218,7 +218,7 @@ function saveApi() {
 
 async function fetchState() {
   try {
-    const r = await fetch(apiUrl + '/');
+    const r = await fetch(apiUrl + '/?symbol=' + currentSymbol);
     state = await r.json();
     document.getElementById('dot').className = 'dot on';
     document.getElementById('st-txt').textContent = 'Connected';
