@@ -623,10 +623,15 @@ def build_state(latency_ms=DEFAULT_LATENCY_MS):
     return result
 
 
-def build_competitors():
+_comp_caches = {}  # symbol -> {"data": ..., "ts": ...}
+
+def build_competitors(symbol="btc"):
+    slug_prefix = f"{symbol}-updown-5m"
+    cache_key = symbol
     now = time.time()
-    if _comp_cache["data"] and now - _comp_cache["ts"] < COMP_CACHE_TTL:
-        return _comp_cache["data"]
+    cached = _comp_caches.get(cache_key, {"data": None, "ts": 0})
+    if cached["data"] and now - cached["ts"] < COMP_CACHE_TTL:
+        return cached["data"]
 
     _, resolutions = get_resolutions()
     result = []
@@ -650,7 +655,7 @@ def build_competitors():
             result.append({"name": w["name"], "addr": w["addr"][:10] + "...", "error": str(e)})
             continue
 
-        trades = [e for e in data if e.get("type") == "TRADE" and "btc-updown-5m" in e.get("slug", "")]
+        trades = [e for e in data if e.get("type") == "TRADE" and slug_prefix in e.get("slug", "")]
 
         by_period = defaultdict(list)
         for t in trades:
@@ -746,8 +751,7 @@ def build_competitors():
             "periods": periods,
         })
 
-    _comp_cache["data"] = result
-    _comp_cache["ts"] = now
+    _comp_caches[cache_key] = {"data": result, "ts": now}
     return result
 
 
@@ -769,7 +773,8 @@ class Handler(BaseHTTPRequestHandler):
             latency = int(params.get("latency", [DEFAULT_LATENCY_MS])[0])
             self._send_json(build_state(latency_ms=latency))
         elif path == "/competitors":
-            self._send_json(build_competitors())
+            symbol = params.get("symbol", ["btc"])[0].lower()
+            self._send_json(build_competitors(symbol=symbol))
         else:
             self.send_error(404)
 

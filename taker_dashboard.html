@@ -123,9 +123,13 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code',mo
 <body>
 
 <div class="hdr">
-  <div style="display:flex;align-items:center">
+  <div style="display:flex;align-items:center;gap:8px">
     <h1>Taker 5min</h1>
     <span class="badge" id="mode-badge">PAPER</span>
+    <div style="display:flex;gap:2px">
+      <button class="rbtn" id="btn-btc" style="font-weight:700" onclick="switchSymbol('btc')">BTC</button>
+      <button class="rbtn" id="btn-eth" onclick="switchSymbol('eth')">ETH</button>
+    </div>
   </div>
   <div class="api-input" id="api-cfg" style="display:none">
     <span style="color:var(--dim);font-size:10px">API:</span>
@@ -192,6 +196,16 @@ const WALLETS = {
 };
 let walletData = {}; // name -> API data
 let apiUrl = localStorage.getItem('taker5m_api') || 'http://54.194.33.93:8765';
+let currentSymbol = 'btc';
+
+function switchSymbol(sym) {
+  currentSymbol = sym;
+  document.getElementById('btn-btc').style.fontWeight = sym === 'btc' ? '700' : '400';
+  document.getElementById('btn-eth').style.fontWeight = sym === 'eth' ? '700' : '400';
+  _lastCompJson = '';
+  walletData = {};
+  fetchCompetitors();
+}
 document.getElementById('api-url').value = apiUrl;
 
 function saveApi() {
@@ -215,7 +229,7 @@ async function fetchState() {
 
 async function fetchCompetitors() {
   try {
-    const r = await fetch(apiUrl + '/competitors');
+    const r = await fetch(apiUrl + '/competitors?symbol=' + currentSymbol);
     const arr = await r.json();
     walletData = {};
     arr.forEach(w => { if (!w.error) walletData[w.name] = w; });
