@@ -460,8 +460,8 @@ function buildChart(snaps, allWalletTrades, K, btcOn, upOn) {
   const pW = W - PAD.l - PAD.r;
   const pH = H - PAD.t - PAD.b;
 
-  const prices = snaps.map(s => s.btc_raw);
-  if (K) prices.push(K);
+  const prices = snaps.map(s => s.btc_raw).filter(p => p != null);
+  if (K && prices.length > 0 && Math.abs(K - prices[0]) < prices[0] * 0.1) prices.push(K);
   const minP = Math.min(...prices) - 3;
   const maxP = Math.max(...prices) + 3;
   const pRange = maxP - minP || 1;
