@@ -132,11 +132,14 @@ const BOTS = {
   iphone1: {address:'0x1f19c48AEe80Ec95396d91f0d21Ac249b8a7f57a', color:'#4ade80', label:'DO Amsterdam'},
   AWS:     {address:'0xdCeF920C3C532AE6F0E195C86BaFB6FD4894D05c', color:'#60a5fa', label:'AWS Original'},
   Stop4:   {address:'0xb43aA6ADc20c12a17B403480bc9422BbBC9E484D', color:'#fb923c', label:'AWS Stop@4'},
-  BSO:     {address:'0x46b2f8a865a3572a435813e747e22cce0e835977', color:'#f472b6', label:'Onur BSO'},
+  BSO:     {address:'0xe0229E10A858860218B6132F4234602C47bD6603', color:'#f472b6', label:'BSO'},
 };
 const BOT_ORDER = ['iphone1','AWS','Stop4','BSO'];
 const COLORS = {iphone1:'#4ade80',AWS:'#60a5fa',Stop4:'#fb923c',BSO:'#f472b6'};
-const USDC_E = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+// Cash balances are queried in pUSD (Polymarket's settlement currency since
+// the v2 cutover). Previously USDC.e (0x2791…) — kept here as a comment for
+// reference: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174.
+const PUSD = '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB';
 const RPC_URLS = ['https://polygon.gateway.tenderly.co','https://polygon.drpc.org'];
 
 let D = null, period = '24h';
@@ -182,7 +185,7 @@ async function fetchBalances() {
   botList.forEach(([name, bot], i) => {
     const addrPadded = '000000000000000000000000' + bot.address.slice(2).toLowerCase();
     const data = '0x70a08231' + addrPadded;
-    batch.push({jsonrpc:'2.0', method:'eth_call', params:[{to:USDC_E, data}, 'latest'], id:i});
+    batch.push({jsonrpc:'2.0', method:'eth_call', params:[{to:PUSD, data}, 'latest'], id:i});
   });
   for (const rpcUrl of RPC_URLS) {
     try {
